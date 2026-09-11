@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inspeção de Rede — Gestor</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f3f5f7;color:#17202a}
+header{background:#173b57;color:#fff;padding:17px 20px;position:sticky;top:0;z-index:10}
+header h1{margin:0;font-size:20px}header p{margin:5px 0 0;opacity:.82;font-size:13px}
+main{max-width:960px;margin:auto;padding:18px}
+.dash-row{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:14px;align-items:start}
+.dash-row .card{margin-bottom:0}
+.card{background:#fff;border-radius:12px;padding:17px;margin-bottom:14px;box-shadow:0 2px 8px #00000010}
+h2{margin:0 0 14px;font-size:19px}
+.statgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:11px}
+.stat{border:1px solid #d9dfe4;border-radius:11px;padding:14px;text-align:center}
+.stat .num{font-size:26px;font-weight:800;color:#173b57}.stat .lbl{font-size:12px;color:#65717d;margin-top:4px}
+.badge{padding:5px 8px;border-radius:15px;background:#edf0f2;font-size:11px;font-weight:bold;white-space:nowrap}
+.red{background:#d32f2f;color:#fff}.orange{background:#fb8c00;color:#fff}.yellow{background:#fdd835;color:#5c4b00}.green{background:#d9f0e2;color:#19613a}.blue{background:#dcecf8;color:#174d70}
+.primary,.secondary,.danger{border:0;border-radius:8px;padding:11px 13px;font-weight:bold;cursor:pointer}
+.primary{background:#1f6f43;color:#fff}.secondary{background:#fff;color:#173b57;border:1px solid #173b57}.danger{background:#fff;color:#a22a20;border:1px solid #e0aaa6}
+.progressrow{margin-bottom:12px}.progresshead{display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px;font-weight:bold}
+.bar{background:#eef0f2;border-radius:20px;height:11px;overflow:hidden}.fill{background:#1f6f43;height:100%}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.filters select{width:auto;flex:1;min-width:130px;padding:10px;border:1px solid #cbd2d8;border-radius:8px}
+.item{border-left:6px solid #999}.item.extremo{border-color:#c0392b}.item.urgente{border-color:#e67e22}.item.media{border-color:#d4a017}
+.itemtop{display:flex;justify-content:space-between;gap:10px}.meta{font-size:13px;line-height:1.65;margin:10px 0}.meta b{color:#34495e}
+.empty{text-align:center;color:#78848e;padding:28px}
+label{font-size:13px;font-weight:bold;color:#45525e;display:block;margin-bottom:5px}
+input,select,textarea{width:100%;padding:12px;border:1px solid #cbd2d8;border-radius:8px;font-size:15px;background:#fff}
+textarea{min-height:80px;resize:vertical}
+.modal{position:fixed;inset:0;background:#0008;display:flex;align-items:center;justify-content:center;padding:15px;z-index:30}
+.modalbox{background:#fff;border-radius:12px;max-width:560px;width:100%;padding:18px;max-height:90vh;overflow:auto}.modalbox h3{margin-top:0}
+.errbox{color:#a22a20;font-size:12.5px;font-weight:bold;margin-top:8px;display:none}.errbox.show{display:block}
+.toastbox{position:fixed;left:50%;bottom:-80px;transform:translateX(-50%);background:#1f6f43;color:#fff;padding:12px 18px;border-radius:9px;font-size:13.5px;font-weight:bold;box-shadow:0 4px 14px #00000030;z-index:50;transition:bottom .25s ease;max-width:90%;text-align:center}
+.toastbox.show{bottom:20px}.toastbox.error{background:#a22a20}
+.cache-banner{background:#fff4d6;border-bottom:1px solid #e8d59a;color:#6b4e00;padding:10px 18px;font-size:12.5px}
+.loc-flag{font-size:11px}
+.loc-flag.loc-no{opacity:0.3;filter:grayscale(1)}
+.equipecard{border:1px solid #d9dfe4;border-radius:11px;padding:14px;margin-bottom:10px}
+.equipe-hover-target{position:relative;cursor:pointer;display:inline-block}
+.equipe-hover-target .hint{font-size:10.5px;font-weight:normal;color:#8a97a8;margin-left:7px;opacity:0;transition:opacity .15s}
+.equipe-hover-target:hover .hint{opacity:1}
+.equipe-preview{display:none;position:absolute;left:0;top:100%;margin-top:8px;background:#fff;border:1px solid #d9dfe4;border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,0.16);padding:12px;width:300px;max-height:280px;overflow:auto;z-index:40;cursor:default}
+.equipe-hover-target:hover .equipe-preview{display:block}
+.preview-title{font-size:12px;font-weight:bold;color:#173b57;margin-bottom:8px}
+.preview-item{font-size:12.5px;padding:7px 0;border-bottom:1px solid #eef0f2;line-height:1.5}
+.preview-item:last-child{border-bottom:none}
+.preview-addr{color:#65717d;font-size:11.5px}
+.preview-empty{font-size:12.5px;color:#8a97a8}
+.equipecard .top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.equipecard .colabs{font-size:12.5px;color:#65717d;margin-top:4px}
+.equipecard .badges{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.feed-badge{display:inline-flex;align-items:center;gap:4px;padding:5px 6px 5px 8px}
+.ring-dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0}
+.ring-dot.ring-orange{background:#e67e22;box-shadow:0 0 0 2px rgba(230,126,34,0.28)}
+.ring-dot.ring-green{background:#1f6f43;box-shadow:0 0 0 2px rgba(31,111,67,0.28)}
+.ring-dot.ring-gray{background:#b7c0c8}
+.x-remove{font-size:9px;vertical-align:top;margin-left:1px;opacity:0.55;cursor:pointer;font-weight:bold;line-height:1;padding:2px}
+.x-remove:hover{opacity:1;color:#a22a20}
+.x-remove.x-armed{opacity:1;color:#a22a20;font-size:10px}
+.equipecard .recado{font-size:12.5px;color:#6b4e00;background:#fff4d6;padding:7px 9px;border-radius:6px;margin-top:8px}
+.equipecard .obs-nota{font-size:12.5px;color:#45525e;background:#f0f2f4;padding:7px 9px;border-radius:6px;margin-top:8px}
+.equipecard .actions{display:flex;gap:8px;margin-top:10px}
+.feedpicker{max-height:260px;overflow:auto;border:1px solid #d9dfe4;border-radius:8px;padding:10px;margin-top:6px}
+.feedgroup{margin-bottom:10px}.feedgroup b{font-size:12.5px;color:#173b57}
+.checkgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:5px}
+.chk{font-weight:normal;font-size:12.5px;display:flex;align-items:center;gap:5px}
+.danger-armed{background:#a22a20!important;color:#fff!important;border-color:#a22a20!important}
+.subgrid,.feedgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}
+.subcard,.feedcard{border:1px solid #d9dfe4;border-radius:11px;padding:14px;background:#fff}
+.feedcard.concluido{border:2px solid #1f6f43;box-shadow:0 0 0 3px rgba(31,111,67,0.15)}
+.subcard{cursor:pointer;transition:.15s}.subcard:hover{transform:translateY(-1px);box-shadow:0 3px 10px #00000012}
+.subhead{display:flex;justify-content:space-between;gap:8px}.sigla{font-weight:800;font-size:18px;color:#173b57}.nome{font-size:12px;color:#687581;margin-top:3px}
+.mini{display:flex;gap:5px;margin-top:9px;flex-wrap:wrap}
+.count{font-size:12px;color:#65717d;margin:8px 0}
+.back{border:0;background:none;color:#173b57;font-weight:bold;padding:0 0 12px;cursor:pointer}
+.dispatch-quick{display:flex;justify-content:flex-end;margin-top:8px}
+@media(min-width:1300px){main{max-width:1260px}.subgrid,.feedgrid{grid-template-columns:repeat(4,1fr)}.statgrid{grid-template-columns:repeat(4,1fr)}}
+@media(max-width:850px){.statgrid{grid-template-columns:repeat(2,1fr)}.checkgrid{grid-template-columns:repeat(2,1fr)}.subgrid,.feedgrid{grid-template-columns:repeat(2,1fr)}.dash-row{grid-template-columns:1fr}}
+@media(max-width:600px){.subgrid,.feedgrid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><h1>⚡ Inspeção de Rede — Gestor</h1><p>Acompanhamento, equipes e atribuição de demandas</p></header>
+<div id="cacheBanner" class="cache-banner hidden"></div>
+
+<main>
+  <div class="dash-row">
+  <div class="card">
+    <h2>Visão geral</h2>
+    <div class="filters">
+      <select id="dfSub" onchange="dashboard()"></select>
+      <select id="dfTipo" onchange="dashboard()"><option value="">Poda + Rede</option><option value="Poda">Poda</option><option value="Rede">Rede</option></select>
+      <select id="dfCiclo" onchange="dashboard()"><option value="">Todos os ciclos</option><option value="1">Ciclo 1 (Jan/Abr)</option><option value="2">Ciclo 2 (Mai/Ago)</option><option value="3">Ciclo 3 (Set/Dez)</option></select>
+    </div>
+    <div class="statgrid">
+      <div class="stat"><div class="num" id="stTotal">0</div><div class="lbl">Total de ocorrências</div></div>
+      <div class="stat"><div class="num" id="stPend">0</div><div class="lbl">Pendentes</div></div>
+      <div class="stat"><div class="num" id="stExec">0</div><div class="lbl">Executadas</div></div>
+      <div class="stat"><div class="num" id="stPct">0%</div><div class="lbl">% concluído</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Execução por ciclo</h2>
+    <div id="execCiclo"></div>
+  </div>
+
+  <div class="card">
+    <h2>Produtividade por equipe (atividades concluídas)</h2>
+    <div id="execEquipe"></div>
+  </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <h2 style="margin:0">Equipes</h2>
+      <button class="primary" onclick="abrirNovaEquipe(null)">＋ Nova equipe</button>
+    </div>
+    <p style="font-size:12.5px;color:#78848e;margin-top:0">Defina quais alimentadores cada equipe enxerga no link do Executor, e deixe um recado que aparece quando a equipe abrir a tela.</p>
+    <div id="listaEquipes"></div>
+  </div>
+
+  <div class="card">
+    <h2>Recado para equipes</h2>
+    <p style="font-size:12.5px;color:#78848e;margin-top:0">Mensagem exibida para a equipe ao abrir o link do Executor.</p>
+    <label>Equipe</label>
+    <select id="recadoEquipeSel" onchange="onRecadoEquipeChange()"></select>
+    <label style="margin-top:10px">Mensagem</label>
+    <textarea id="recadoTexto" placeholder="Ex.: Priorizar criticidade Extremo esta semana."></textarea>
+    <div style="display:flex;justify-content:flex-end;margin-top:10px">
+      <button class="primary" onclick="enviarRecado()">📣 Enviar recado</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Despacho de demandas</h2>
+    <p style="font-size:12.5px;color:#78848e;margin-top:0">Navegue por subestação → alimentador para designar equipes às demandas pendentes.</p>
+
+    <div id="despViewSubs">
+      <div id="despSubs" class="subgrid"></div>
+    </div>
+
+    <div id="despViewFeeds" class="hidden">
+      <button class="back" onclick="showDespachoSubs()">← Voltar para subestações</button>
+      <h3 id="despTituloSub" style="margin:0 0 10px"></h3>
+      <div id="despFeeds" class="feedgrid"></div>
+      <div id="despArquivados" class="hidden" style="margin-top:14px"></div>
+    </div>
+
+    <div id="despViewDemandas" class="hidden">
+      <button class="back" onclick="abrirDespachoSub(dispSub)">← Voltar para alimentadores</button>
+      <h3 id="despTituloFeed" style="margin:0 0 10px"></h3>
+      <div style="display:flex;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+        <button class="secondary" id="btnVerExecutadasDesp" onclick="abrirExecutadasDespacho()">📋 Ver executadas</button>
+        <button class="primary" id="btnDespacharSelecao" onclick="despacharSelecao()" disabled>🚚 Despachar selecionadas (0)</button>
+      </div>
+      <div id="despDemandas"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Ocorrências recorrentes</h2>
+    <p style="font-size:12.5px;color:#78848e;margin-top:0">Mesmo alimentador + serviço + endereço aparecendo repetidamente — pode indicar necessidade de solução definitiva.</p>
+    <div id="listaRecorrencias"></div>
+  </div>
+</main>
+
+<div id="modal" class="modal hidden"><div class="modalbox">
+<h3 id="modalTitle">Nova equipe</h3><div id="modalBody"></div>
+</div></div>
+<div id="toastBox" class="toastbox"></div>
+
+<style>.hidden{display:none!important}</style>
+<script>
+const API_URL='/.netlify/functions/proxy';
+let config={},dados=[],equipes=[],arquivados=[];
+const TOLERANCIA_ENDERECO=20;
+
+async function apiGet(action,payload){
+  let url=API_URL+'?action='+encodeURIComponent(action);
+  if(payload!==undefined)url+='&payload='+encodeURIComponent(JSON.stringify(payload));
+  const res=await fetch(url);
+  if(!res.ok)throw new Error('HTTP '+res.status);
+  const data=await res.json();
+  if(data.error)throw new Error(data.error);
+  return data;
+}
+const CACHE_KEY='inspecao_rede_cache_v1';
+function salvarCacheLocal(){
+  try{localStorage.setItem(CACHE_KEY,JSON.stringify({config,dados,equipes,arquivados,atualizadoEm:new Date().toISOString()}));}
+  catch(e){console.error('Falha ao salvar cache local',e);}
+}
+function carregarCacheLocal(){
+  try{const raw=localStorage.getItem(CACHE_KEY);return raw?JSON.parse(raw):null;}
+  catch(e){return null;}
+}
+function formatarDataHora(iso){
+  const d=new Date(iso);const p=n=>String(n).padStart(2,'0');
+  return p(d.getDate())+'/'+p(d.getMonth()+1)+' às '+p(d.getHours())+':'+p(d.getMinutes());
+}
+function mostrarAvisoCache(timestamp){
+  const el=document.getElementById('cacheBanner');
+  if(!el)return;
+  el.innerHTML='📴 Sem conexão com a planilha — mostrando dados salvos localmente ('+(timestamp?formatarDataHora(timestamp):'sem data')+'). <button class="secondary" style="padding:4px 9px;font-size:11.5px;margin-left:6px" onclick="tentarNovamente()">🔄 Tentar novamente</button>';
+  el.classList.remove('hidden');
+}
+function ocultarAvisoCache(){
+  const el=document.getElementById('cacheBanner');
+  if(el){el.classList.add('hidden');el.innerHTML='';}
+}
+async function carregarTudo(){
+  const primeiraCarga=!dados.length&&!Object.keys(config).length;
+  let cache=null;
+  if(primeiraCarga){
+    cache=carregarCacheLocal();
+    if(cache){config=cache.config||{};dados=cache.dados||[];equipes=cache.equipes||[];arquivados=cache.arquivados||[];}
+  }
+  try{
+    const r=await apiGet('getAll');
+    config=r.config||{};
+    dados=r.ocorrencias||[];
+    equipes=r.equipes||[];
+    arquivados=r.arquivados||[];
+    salvarCacheLocal();
+    ocultarAvisoCache();
+  }catch(e){
+    console.error(e);
+    if(primeiraCarga&&cache){mostrarAvisoCache(cache.atualizadoEm);}
+    else{showToast('Não foi possível atualizar a planilha. Verifique a conexão.','error');}
+  }
+}
+async function tentarNovamente(){
+  await carregarTudo();
+  initDashboardFilters();
+  renderEquipes();
+  initRecadoSelect();
+  dashboard();
+  showDespachoSubs();
+}
+function estaArquivado(sub,feed){return arquivados.some(a=>a.sub===sub&&a.feed===feed);}
+function toggleArquivados(){
+  const lista=document.getElementById('listaArquivados');
+  const btn=document.getElementById('btnToggleArquivados');
+  const abrindo=lista.classList.contains('hidden');
+  lista.classList.toggle('hidden');
+  if(btn)btn.textContent=btn.textContent.replace(abrindo?'📦 Ver':'📦 Ocultar',abrindo?'📦 Ocultar':'📦 Ver');
+}
+async function arquivarAlimentador(f){
+  try{
+    await apiGet('arquivarAlimentador',{sub:dispSub,feed:f});
+    await carregarTudo();
+    abrirDespachoSub(dispSub);
+    showToast('Alimentador arquivado.');
+  }catch(e){showToast('Falha ao arquivar: '+e.message,'error');}
+}
+async function desarquivarAlimentador(f){
+  try{
+    await apiGet('desarquivarAlimentador',{sub:dispSub,feed:f});
+    await carregarTudo();
+    abrirDespachoSub(dispSub);
+    showToast('Alimentador desarquivado.');
+  }catch(e){showToast('Falha ao desarquivar: '+e.message,'error');}
+}
+
+function showToast(msg,type){const box=document.getElementById('toastBox');box.textContent=msg;box.className='toastbox show'+(type==='error'?' error':'');clearTimeout(window._toastTimer);window._toastTimer=setTimeout(()=>{box.className='toastbox';},3200);}
+function cicloLabel(c){return {'1':'Ciclo 1 (Jan/Abr)','2':'Ciclo 2 (Mai/Ago)','3':'Ciclo 3 (Set/Dez)'}[String(c)]||('Ciclo '+c);}
+function initRecadoSelect(){
+  const sel=document.getElementById('recadoEquipeSel');
+  const cur=sel.value;
+  sel.innerHTML='<option value="">Selecione a equipe...</option>'+equipes.map(e=>`<option value="${e.id}">${e.nome}</option>`).join('');
+  sel.value=cur;
+  if(sel.value!==cur)document.getElementById('recadoTexto').value='';
+}
+function onRecadoEquipeChange(){
+  const eqId=document.getElementById('recadoEquipeSel').value;
+  const eq=equipes.find(e=>e.id===eqId);
+  document.getElementById('recadoTexto').value=eq?(eq.recado||''):'';
+}
+async function enviarRecado(){
+  const eqId=document.getElementById('recadoEquipeSel').value;
+  if(!eqId){showToast('Selecione uma equipe.','error');return;}
+  const eq=equipes.find(e=>e.id===eqId);
+  if(!eq)return;
+  const texto=document.getElementById('recadoTexto').value.trim();
+  try{
+    await apiGet('updateEquipe',{id:eq.id,nome:eq.nome,colaborador1:eq.colaborador1,colaborador2:eq.colaborador2,observacao:eq.observacao,alimentadoresLiberados:eq.alimentadoresLiberados,recado:texto});
+    await carregarTudo();
+    renderEquipes();
+    showToast('Recado enviado para '+eq.nome+'.');
+  }catch(e){showToast('Falha ao enviar: '+e.message,'error');}
+}
+
+function nomeEquipe(id){const e=equipes.find(x=>x.id===id);return e?e.nome:'';}
+function nomesEquipes(csv){if(!csv)return'';return String(csv).split(',').map(id=>nomeEquipe(id.trim())).filter(Boolean).join(' + ');}
+function critCount(arr,c){return arr.filter(x=>x.criticidade===c).length;}
+function pctExec(arr){return arr.length?Math.round(arr.filter(x=>x.status==='Executada').length/arr.length*100):0;}
+function normalizarRua(end){let rua=(end||'').split(',')[0]||end||'';return rua.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();}
+function extrairNumero(end){const m=(end||'').match(/(\d+)/);return m?parseInt(m[1],10):null;}
+function mesmaOcorrencia(a,b){if(a.sub!==b.sub||a.feed!==b.feed||a.tipo!==b.tipo)return false;if(a.tipo==='Rede'&&a.servico!==b.servico)return false;if(normalizarRua(a.endereco)!==normalizarRua(b.endereco))return false;const na=extrairNumero(a.endereco),nb=extrairNumero(b.endereco);if(na===null||nb===null)return true;return Math.abs(na-nb)<=TOLERANCIA_ENDERECO;}
+function fecharModal(){document.getElementById('modal').classList.add('hidden');}
+
+function initDashboardFilters(){
+  const sel=document.getElementById('dfSub');
+  sel.innerHTML='<option value="">Todas as subestações</option>'+Object.entries(config).map(([sig,s])=>`<option value="${sig}">${sig} — ${s.nome}</option>`).join('');
+}
+
+function dashboard(){
+  const sf=document.getElementById('dfSub').value,tf=document.getElementById('dfTipo').value,cy=document.getElementById('dfCiclo').value;
+  const arr=dados.filter(x=>(!sf||x.sub===sf)&&(!tf||x.tipo===tf)&&(!cy||x.ciclo===cy));
+  const exec=arr.filter(x=>x.status==='Executada');
+  document.getElementById('stTotal').textContent=arr.length;
+  document.getElementById('stPend').textContent=arr.length-exec.length;
+  document.getElementById('stExec').textContent=exec.length;
+  document.getElementById('stPct').textContent=(arr.length?Math.round(exec.length/arr.length*100):0)+'%';
+
+  const pct=a=>a.length?Math.round(a.filter(x=>x.status==='Executada').length/a.length*100):0;
+  document.getElementById('execCiclo').innerHTML=[1,2,3].map(c=>{const a=arr.filter(x=>x.ciclo===String(c)),p=pct(a);return `<div class="progressrow"><div class="progresshead"><span>${cicloLabel(c)}</span><span>${p}% (${a.filter(x=>x.status==='Executada').length}/${a.length})</span></div><div class="bar"><div class="fill" style="width:${p}%"></div></div></div>`}).join('');
+
+  const porEquipe={};
+  exec.forEach(x=>{const k=x.equipe||'Sem equipe informada';porEquipe[k]=(porEquipe[k]||0)+1;});
+  const entradas=Object.entries(porEquipe).sort((a,b)=>b[1]-a[1]);
+  const maxV=entradas.length?entradas[0][1]:1;
+  document.getElementById('execEquipe').innerHTML=entradas.length?entradas.map(([nome,qtd])=>`<div class="progressrow"><div class="progresshead"><span>${nome}</span><span>${qtd} concluída(s)</span></div><div class="bar"><div class="fill" style="width:${Math.round(qtd/maxV*100)}%"></div></div></div>`).join(''):'<div class="empty">Nenhuma atividade concluída ainda neste filtro.</div>';
+
+  renderRecorrencias();
+}
+
+function equipeDesignadaInclui(csv,id){if(!csv)return false;return String(csv).split(',').map(s=>s.trim()).includes(id);}
+function statusAlimentador(f){
+  const arr=dados.filter(x=>x.feed===f);
+  if(!arr.length)return 'gray';
+  return arr.some(x=>x.status==='Pendente')?'orange':'green';
+}
+function renderEquipes(){
+  const el=document.getElementById('listaEquipes');
+  if(!equipes.length){el.innerHTML='<div class="empty">Nenhuma equipe cadastrada ainda.</div>';return;}
+  el.innerHTML=equipes.map(e=>{
+    const despachadas=dados.filter(x=>x.status==='Pendente'&&equipeDesignadaInclui(x.equipeDesignada,e.id));
+    const previewHtml=despachadas.length?despachadas.map(x=>`<div class="preview-item"><span class="badge ${x.criticidade==='Extremo'?'red':x.criticidade==='Urgente'?'orange':'yellow'}">${x.criticidade}</span> ${x.sub}/${x.feed} — ${x.tipo}${x.servico?' ('+x.servico+')':''}<br><span class="preview-addr">${x.endereco}</span></div>`).join(''):'<div class="preview-empty">Nenhuma demanda despachada pendente no momento.</div>';
+    const badgesHtml=(e.alimentadoresLiberados||[]).length?e.alimentadoresLiberados.map(f=>{
+      const st=statusAlimentador(f);
+      const titulo=st==='orange'?'Em execução':st==='green'?'100% concluído':'Sem demandas registradas';
+      return `<span class="badge blue feed-badge"><span class="ring-dot ring-${st}" title="${titulo}"></span>${f}<span class="x-remove" title="Remover da equipe" onclick="removerAlimentadorEquipe(event,'${e.id}','${f}',this)">×</span></span>`;
+    }).join(''):'<span class="badge">Nenhum alimentador liberado ainda</span>';
+    return `<div class="equipecard"><div class="top"><div>
+      <span class="equipe-hover-target"><b>${e.nome}</b><span class="hint">🔎 ver demandas despachadas</span>
+        <div class="equipe-preview">
+          <div class="preview-title">Despachadas — ${e.nome} (${despachadas.length})</div>
+          ${previewHtml}
+        </div>
+      </span>
+      <div class="colabs">${e.colaborador1||'—'}${e.colaborador2?' · '+e.colaborador2:''}</div>
+    </div></div><div class="badges">${badgesHtml}</div>${e.observacao?`<div class="obs-nota">📝 ${e.observacao}</div>`:''}${e.recado?`<div class="recado">📣 Recado atual: ${e.recado}</div>`:''}<div class="actions"><button class="secondary" onclick="abrirNovaEquipe('${e.id}')">Editar</button><button class="danger" onclick="excluirEquipe('${e.id}',this)">Excluir</button></div></div>`;
+  }).join('');
+}
+function removerAlimentadorEquipe(ev,eqId,feed,el){
+  ev.stopPropagation();
+  if(el.dataset.armed==='1'){
+    confirmarRemocaoAlimentador(eqId,feed);
+  }else{
+    el.dataset.armed='1';el.textContent='✓';el.classList.add('x-armed');el.title='Clique para confirmar a remoção';
+    setTimeout(()=>{if(el.dataset.armed==='1'){el.dataset.armed='0';el.textContent='×';el.classList.remove('x-armed');el.title='Remover da equipe';}},3500);
+  }
+}
+async function confirmarRemocaoAlimentador(eqId,feed){
+  const eq=equipes.find(e=>e.id===eqId);
+  if(!eq)return;
+  const alimentadoresLiberados=(eq.alimentadoresLiberados||[]).filter(f=>f!==feed);
+  try{
+    await apiGet('updateEquipe',{id:eq.id,nome:eq.nome,colaborador1:eq.colaborador1,colaborador2:eq.colaborador2,observacao:eq.observacao,recado:eq.recado,alimentadoresLiberados});
+    await carregarTudo();
+    renderEquipes();
+    showToast('Alimentador '+feed+' removido da equipe '+eq.nome+'.');
+  }catch(e){showToast('Falha ao remover: '+e.message,'error');}
+}
+
+function abrirNovaEquipe(idEdit){
+  const existente=idEdit?equipes.find(e=>e.id===idEdit):null;
+  document.getElementById('modal').classList.remove('hidden');
+  document.getElementById('modalTitle').textContent=existente?'Editar equipe':'Nova equipe';
+  document.getElementById('modalBody').innerHTML=`<label>Nome / rádio da equipe</label><input id="eqNome" value="${existente?existente.nome:''}" placeholder="Ex.: Equipe 01 / Rádio Alfa"><label style="margin-top:10px">Colaborador 1</label><input id="eqColab1" value="${existente?existente.colaborador1:''}"><label style="margin-top:10px">Colaborador 2</label><input id="eqColab2" value="${existente?existente.colaborador2:''}"><label style="margin-top:10px">Observação</label><textarea id="eqObs" placeholder="Notas internas sobre a equipe (não aparece para o executor)">${existente?existente.observacao||'':''}</textarea><div class="errbox" id="eqErr"></div><div style="display:flex;gap:8px;margin-top:15px"><button class="primary" onclick="salvarEquipe(${existente?`'${existente.id}'`:'null'})">Salvar equipe</button><button class="secondary" onclick="fecharModal()">Cancelar</button></div>`;
+}
+async function salvarEquipe(idEdit){
+  const nome=document.getElementById('eqNome').value.trim();
+  const colaborador1=document.getElementById('eqColab1').value.trim();
+  const colaborador2=document.getElementById('eqColab2').value.trim();
+  const observacao=document.getElementById('eqObs').value.trim();
+  const err=document.getElementById('eqErr');
+  if(!nome){err.textContent='Informe o nome/rádio da equipe.';err.classList.add('show');return;}
+  err.classList.remove('show');
+  try{
+    if(idEdit){
+      const existente=equipes.find(e=>e.id===idEdit);
+      await apiGet('updateEquipe',{id:idEdit,nome,colaborador1,colaborador2,observacao,alimentadoresLiberados:existente.alimentadoresLiberados||[],recado:existente.recado||''});
+    }else{
+      await apiGet('addEquipe',{nome,colaborador1,colaborador2,observacao,alimentadoresLiberados:[],recado:''});
+    }
+    await carregarTudo();
+    fecharModal();renderEquipes();dashboard();initRecadoSelect();
+    showToast('Equipe salva na planilha.');
+  }catch(e){err.textContent='Falha ao salvar: '+e.message;err.classList.add('show');}
+}
+function excluirEquipe(id,btn){
+  if(btn.dataset.armed==='1'){
+    const url=API_URL+'?action=deleteEquipe&id='+encodeURIComponent(id);
+    fetch(url).then(r=>r.json()).then(async data=>{
+      if(data.error){showToast('Falha ao excluir: '+data.error,'error');return;}
+      await carregarTudo();renderEquipes();dashboard();initRecadoSelect();showToast('Equipe removida.');
+    }).catch(e=>showToast('Falha ao excluir: '+e.message,'error'));
+  }else{
+    btn.dataset.armed='1';btn.textContent='Confirmar exclusão?';btn.classList.add('danger-armed');
+    setTimeout(()=>{if(btn.dataset.armed==='1'){btn.dataset.armed='0';btn.textContent='Excluir';btn.classList.remove('danger-armed');}},4000);
+  }
+}
+
+let dispSub='',dispFeed='';
+let selecionadas=new Set();
+
+async function showDespachoSubs(){
+  dispSub='';dispFeed='';selecionadas.clear();
+  document.getElementById('despViewSubs').classList.remove('hidden');
+  document.getElementById('despViewFeeds').classList.add('hidden');
+  document.getElementById('despViewDemandas').classList.add('hidden');
+  await carregarTudo();
+  document.getElementById('despSubs').innerHTML=Object.entries(config).map(([sig,s])=>{
+    const arr=dados.filter(x=>x.sub===sig);
+    const pend=arr.filter(x=>x.status==='Pendente');
+    const ciclosHtml=[1,2,3].map(c=>{
+      const arrC=arr.filter(x=>x.ciclo===String(c));
+      return `<span class="badge">${cicloLabel(c).replace('Ciclo ','C')}: ${pctExec(arrC)}%</span>`;
+    }).join('');
+    return `<div class="subcard" onclick="abrirDespachoSub('${sig}')">
+      <div class="subhead"><div><div class="sigla">${sig}</div><div class="nome">${s.nome}</div></div><span class="badge green">${pctExec(arr)}% concl.${arr.length&&pctExec(arr)===100?' ✅':''}</span></div>
+      <div class="mini"><span class="badge red">🔴 ${critCount(pend,'Extremo')}</span><span class="badge orange">🟠 ${critCount(pend,'Urgente')}</span><span class="badge yellow">🟡 ${critCount(pend,'Média')}</span></div>
+      <div class="mini">${ciclosHtml}</div>
+    </div>`;
+  }).join('')||'<div class="empty">Nenhuma subestação cadastrada.</div>';
+}
+
+async function abrirDespachoSub(sig){
+  dispSub=sig;dispFeed='';selecionadas.clear();
+  document.getElementById('despViewSubs').classList.add('hidden');
+  document.getElementById('despViewFeeds').classList.remove('hidden');
+  document.getElementById('despViewDemandas').classList.add('hidden');
+  await carregarTudo();
+  document.getElementById('despTituloSub').textContent=sig+' — '+config[sig].nome;
+  const todosFeeds=config[sig].feeds;
+  const feeds=todosFeeds.filter(f=>!estaArquivado(sig,f));
+  const feedsArquivados=todosFeeds.filter(f=>estaArquivado(sig,f));
+  const cardFeed=f=>{
+    const arr=dados.filter(x=>x.sub===sig&&x.feed===f);
+    const pend=arr.filter(x=>x.status==='Pendente');
+    const poda=arr.filter(x=>x.tipo==='Poda').length, rede=arr.filter(x=>x.tipo==='Rede').length;
+    const concluido=arr.length>0&&pend.length===0;
+    return `<div class="feedcard${concluido?' concluido':''}">
+      <div class="subhead" style="cursor:pointer" onclick="abrirDespachoFeed('${f}')"><strong>⚡ ${f}</strong><span class="badge green">${pctExec(arr)}% concl.${concluido?' ✅':''}</span></div>
+      <div class="mini" style="cursor:pointer" onclick="abrirDespachoFeed('${f}')"><span class="badge red">🔴 ${critCount(pend,'Extremo')}</span><span class="badge orange">🟠 ${critCount(pend,'Urgente')}</span><span class="badge yellow">🟡 ${critCount(pend,'Média')}</span></div>
+      <div class="count">🌳 ${poda} Poda · ⚡ ${rede} Rede (total)</div>
+      ${pend.length?`<div class="dispatch-quick"><button class="secondary" onclick="despacharAlimentadorTodo('${f}')">🚚 Despachar tudo (${pend.length})</button></div>`:(arr.length?`<div class="dispatch-quick" style="justify-content:space-between;align-items:center"><span class="badge green">✅ Concluída</span><button class="secondary" onclick="arquivarAlimentador('${f}')">📦 Arquivar</button></div>`:'<div class="empty" style="padding:4px 0;color:#9aa5ad">Sem demandas registradas</div>')}
+    </div>`;
+  };
+  let html=feeds.length?feeds.map(cardFeed).join(''):'<div class="empty">Nenhum alimentador ativo nesta subestação.</div>';
+  document.getElementById('despFeeds').innerHTML=html;
+  const arqEl=document.getElementById('despArquivados');
+  if(feedsArquivados.length){
+    arqEl.classList.remove('hidden');
+    arqEl.innerHTML=`<button class="back" onclick="toggleArquivados()" id="btnToggleArquivados">📦 Ver arquivados (${feedsArquivados.length})</button><div id="listaArquivados" class="feedgrid hidden">${feedsArquivados.map(f=>{
+      const arr=dados.filter(x=>x.sub===sig&&x.feed===f);
+      return `<div class="feedcard"><div class="subhead"><strong>⚡ ${f}</strong><span class="badge green">✅ 100%</span></div><div class="count">${arr.length} demanda(s) no histórico</div><div class="dispatch-quick"><button class="secondary" onclick="desarquivarAlimentador('${f}')">↩️ Desarquivar</button></div></div>`;
+    }).join('')}</div>`;
+  }else{
+    arqEl.classList.add('hidden');
+    arqEl.innerHTML='';
+  }
+}
+
+async function abrirDespachoFeed(f){
+  dispFeed=f;selecionadas.clear();
+  document.getElementById('despViewFeeds').classList.add('hidden');
+  document.getElementById('despViewDemandas').classList.remove('hidden');
+  await carregarTudo();
+  document.getElementById('despTituloFeed').textContent=dispSub+' / '+f;
+  renderDespachoDemandas();
+}
+
+function renderDespachoDemandas(){
+  const todas=dados.filter(x=>x.sub===dispSub&&x.feed===dispFeed);
+  const arr=todas.filter(x=>x.status==='Pendente');
+  const execCount=todas.length-arr.length;
+  const ordem={Extremo:0,Urgente:1,'Média':2};
+  const poda=arr.filter(x=>x.tipo==='Poda').sort((a,b)=>ordem[a.criticidade]-ordem[b.criticidade]);
+  const rede=arr.filter(x=>x.tipo==='Rede').sort((a,b)=>ordem[a.criticidade]-ordem[b.criticidade]);
+  const grupo=(titulo,icone,lista)=>lista.length?`<h4 style="margin:14px 0 8px;font-size:14px">${icone} ${titulo} (${lista.length})</h4>`+lista.map(cardDespacho).join(''):'';
+  const el=document.getElementById('despDemandas');
+  el.innerHTML=(poda.length||rede.length)?grupo('Poda','🌳',poda)+grupo('Rede','⚡',rede):'<div class="empty">Nenhuma demanda pendente neste alimentador.</div>';
+  const btnExec=document.getElementById('btnVerExecutadasDesp');
+  if(btnExec)btnExec.textContent='📋 Ver executadas ('+execCount+')';
+  atualizarBotaoDespachoSelecao();
+}
+function abrirExecutadasDespacho(){
+  const arr=dados.filter(x=>x.sub===dispSub&&x.feed===dispFeed&&x.status==='Executada');
+  document.getElementById('modal').classList.remove('hidden');
+  document.getElementById('modalTitle').textContent='Executadas — '+dispSub+' / '+dispFeed;
+  document.getElementById('modalBody').innerHTML=(arr.length?arr.map(cardDespachoExecutada).join(''):'<div class="empty">Nenhuma demanda executada neste alimentador ainda.</div>')+'<div style="margin-top:14px"><button class="secondary" onclick="fecharModal()">Fechar</button></div>';
+}
+function locBadge(x){
+  return x.latitude&&x.longitude?'<span class="loc-flag loc-yes" title="Localização salva">📍</span>':'<span class="loc-flag loc-no" title="Sem localização salva">📍</span>';
+}
+function cardDespachoExecutada(x){
+  return `<div class="card item ${x.criticidade.toLowerCase().replace('é','e')}" style="box-shadow:none;padding:14px">
+    <div class="itemtop"><strong>${x.tipo==='Poda'?'🌳':'⚡'} ${x.tipo}${x.servico?' — '+x.servico:''}</strong><span class="badge green">✓ Executada</span></div>
+    <div class="meta">${x.endereco} ${locBadge(x)}<br><b>Ciclo:</b> ${cicloLabel(x.ciclo)}<br><b>Equipe:</b> ${x.equipe||'—'}<br><b>Data/hora:</b> ${x.dataExecucao||'—'}${x.obsExec?'<br><b>Obs.:</b> '+x.obsExec:''}</div>
+  </div>`;
+}
+function cardDespacho(x){
+  const desig=nomesEquipes(x.equipeDesignada);
+  return `<div class="card item ${x.criticidade.toLowerCase().replace('é','e')}" style="box-shadow:none;padding:14px">
+    <div class="itemtop">
+      <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer"><input type="checkbox" ${selecionadas.has(x.id)?'checked':''} onchange="toggleSelecao('${x.id}',this.checked)" style="margin-top:3px"><span><strong>${x.tipo==='Poda'?'🌳':'⚡'} ${x.tipo}${x.servico?' — '+x.servico:''}</strong></span></label>
+      <span class="badge ${x.criticidade==='Extremo'?'red':x.criticidade==='Urgente'?'orange':'yellow'}">${x.criticidade}</span>
+    </div>
+    <div class="meta">${x.endereco} ${locBadge(x)}<br><b>Ciclo:</b> ${cicloLabel(x.ciclo)}${desig?'<br><b>Equipe designada:</b> '+desig:''}</div>
+  </div>`;
+}
+function toggleSelecao(id,checked){
+  if(checked)selecionadas.add(id);else selecionadas.delete(id);
+  atualizarBotaoDespachoSelecao();
+}
+function atualizarBotaoDespachoSelecao(){
+  const btn=document.getElementById('btnDespacharSelecao');
+  if(!btn)return;
+  btn.textContent='🚚 Despachar selecionadas ('+selecionadas.size+')';
+  btn.disabled=selecionadas.size===0;
+}
+function despacharSelecao(){abrirModalDespacho([...selecionadas],dispFeed);}
+function despacharAlimentadorTodo(f){
+  const ids=dados.filter(x=>x.sub===dispSub&&x.feed===f&&x.status==='Pendente').map(x=>x.id);
+  abrirModalDespacho(ids,f);
+}
+function abrirModalDespacho(ids,feed){
+  if(!ids.length){showToast('Selecione ao menos uma demanda.','error');return;}
+  document.getElementById('modal').classList.remove('hidden');
+  document.getElementById('modalTitle').textContent='Despachar '+ids.length+' demanda(s)';
+  document.getElementById('modalBody').innerHTML=`<p style="font-size:13px;color:#65717d;margin-top:0">Selecione até 2 equipes para receber estas demandas. O alimentador ${feed||''} passará a aparecer liberado para elas.</p><div class="feedpicker" id="despEquipeCheckboxes">${equipes.length?equipes.map(e=>`<label class="chk" style="margin-bottom:10px"><input type="checkbox" value="${e.id}" onchange="limitarDoisCheckbox(this)"> ${e.nome}</label>`).join(''):'<div class="empty">Nenhuma equipe cadastrada. Crie uma equipe primeiro.</div>'}</div><label style="margin-top:12px">Recado para a(s) equipe(s) (opcional)</label><textarea id="despRecado" placeholder="Ex.: Priorizar criticidade Extremo esta semana."></textarea><div class="errbox" id="despErr"></div><div style="display:flex;gap:8px;margin-top:15px"><button class="primary" onclick='confirmarDespacho(${JSON.stringify(ids)},${JSON.stringify(feed||'')})'>Confirmar despacho</button><button class="secondary" onclick="fecharModal()">Cancelar</button></div>`;
+}
+function limitarDoisCheckbox(chk){
+  const marcados=[...document.querySelectorAll('#despEquipeCheckboxes input:checked')];
+  if(marcados.length>2){chk.checked=false;showToast('Selecione no máximo 2 equipes.','error');}
+}
+async function confirmarDespacho(ids,feed){
+  const marcados=[...document.querySelectorAll('#despEquipeCheckboxes input:checked')].map(x=>x.value);
+  const err=document.getElementById('despErr');
+  if(!marcados.length){err.textContent='Selecione ao menos 1 equipe.';err.classList.add('show');return;}
+  err.classList.remove('show');
+  const equipeDesignada=marcados.join(',');
+  const recadoTexto=document.getElementById('despRecado').value.trim();
+  const btn=document.querySelector('#modal .primary');btn.disabled=true;btn.textContent='Despachando...';
+  try{
+    for(const id of ids){await apiGet('updateOcorrencia',{id,equipeDesignada});}
+    for(const eqId of marcados){
+      const eq=equipes.find(e=>e.id===eqId);
+      if(!eq)continue;
+      const precisaLiberar=feed&&!(eq.alimentadoresLiberados||[]).includes(feed);
+      const precisaRecado=recadoTexto.length>0;
+      if(precisaLiberar||precisaRecado){
+        const alimentadoresLiberados=precisaLiberar?[...(eq.alimentadoresLiberados||[]),feed]:(eq.alimentadoresLiberados||[]);
+        await apiGet('updateEquipe',{id:eq.id,nome:eq.nome,colaborador1:eq.colaborador1,colaborador2:eq.colaborador2,observacao:eq.observacao,alimentadoresLiberados,recado:precisaRecado?recadoTexto:(eq.recado||'')});
+      }
+    }
+    await carregarTudo();
+    fecharModal();
+    if(dispFeed){renderDespachoDemandas();}else if(dispSub){abrirDespachoSub(dispSub);}else{showDespachoSubs();}
+    renderEquipes();
+    initRecadoSelect();
+    dashboard();
+    showToast(ids.length+' demanda(s) despachada(s).'+(recadoTexto?' Recado enviado.':''));
+  }catch(e){
+    showToast('Falha ao despachar: '+e.message,'error');
+    btn.disabled=false;btn.textContent='Confirmar despacho';
+  }
+}
+
+function renderRecorrencias(){
+  const grupos=[],usados=new Set();
+  dados.forEach(x=>{
+    if(usados.has(x.id))return;
+    const iguais=dados.filter(y=>mesmaOcorrencia(x,y));
+    if(iguais.length>1){iguais.forEach(y=>usados.add(y.id));grupos.push({ref:x,itens:iguais});}
+  });
+  grupos.sort((a,b)=>b.itens.length-a.itens.length);
+  const el=document.getElementById('listaRecorrencias');
+  if(!grupos.length){el.innerHTML='<div class="empty">Nenhuma ocorrência recorrente identificada.</div>';return;}
+  el.innerHTML=grupos.map(g=>`<div class="progressrow"><div class="progresshead"><span>${g.ref.sub} ${g.ref.feed} — ${g.ref.tipo}${g.ref.servico?' ('+g.ref.servico+')':''} — ${g.ref.endereco}</span><span class="badge blue">${g.itens.length}x</span></div></div>`).join('');
+}
+
+(async function init(){
+  await carregarTudo();
+  initDashboardFilters();
+  renderEquipes();
+  initRecadoSelect();
+  dashboard();
+  showDespachoSubs();
+})();
+</script>
+</body>
+</html>
