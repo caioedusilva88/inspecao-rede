@@ -24,7 +24,8 @@ h2{margin:0 0 14px;font-size:19px}
 .bar{background:#eef0f2;border-radius:20px;height:11px;overflow:hidden}.fill{background:#1f6f43;height:100%}
 .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.filters select{width:auto;flex:1;min-width:130px;padding:10px;border:1px solid #cbd2d8;border-radius:8px}
 .item{border-left:6px solid #999}.item.extremo{border-color:#c0392b}.item.urgente{border-color:#e67e22}.item.media{border-color:#d4a017}
-.itemtop{display:flex;justify-content:space-between;gap:10px}.meta{font-size:13px;line-height:1.65;margin:10px 0}.meta b{color:#34495e}
+.itemtop{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}.meta{font-size:13px;line-height:1.65;margin:10px 0}.meta b{color:#34495e}
+.demandas-grid-desp .card{margin-bottom:0;height:100%}
 .empty{text-align:center;color:#78848e;padding:28px}
 label{font-size:13px;font-weight:bold;color:#45525e;display:block;margin-bottom:5px}
 input,select,textarea{width:100%;padding:12px;border:1px solid #cbd2d8;border-radius:8px;font-size:15px;background:#fff}
@@ -32,6 +33,7 @@ textarea{min-height:80px;resize:vertical}
 .modal{position:fixed;inset:0;background:#0008;display:flex;align-items:center;justify-content:center;padding:15px;z-index:30}
 .modalbox{background:#fff;border-radius:12px;max-width:560px;width:100%;padding:18px;max-height:90vh;overflow:auto}.modalbox h3{margin-top:0}
 .errbox{color:#a22a20;font-size:12.5px;font-weight:bold;margin-top:8px;display:none}.errbox.show{display:block}
+.checktoggle{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:normal;color:#45525e}
 .toastbox{position:fixed;left:50%;bottom:-80px;transform:translateX(-50%);background:#1f6f43;color:#fff;padding:12px 18px;border-radius:9px;font-size:13.5px;font-weight:bold;box-shadow:0 4px 14px #00000030;z-index:50;transition:bottom .25s ease;max-width:90%;text-align:center}
 .toastbox.show{bottom:20px}.toastbox.error{background:#a22a20}
 .cache-banner{background:#fff4d6;border-bottom:1px solid #e8d59a;color:#6b4e00;padding:10px 18px;font-size:12.5px}
@@ -87,9 +89,10 @@ textarea{min-height:80px;resize:vertical}
 .count{font-size:12px;color:#65717d;margin:8px 0}
 .back{border:0;background:none;color:#173b57;font-weight:bold;padding:0 0 12px;cursor:pointer}
 .dispatch-quick{display:flex;justify-content:flex-end;margin-top:8px}
-@media(min-width:1300px){main{max-width:1260px}.subgrid,.feedgrid{grid-template-columns:repeat(4,1fr)}.statgrid{grid-template-columns:repeat(4,1fr)}}
-@media(max-width:850px){.statgrid{grid-template-columns:repeat(2,1fr)}.checkgrid{grid-template-columns:repeat(2,1fr)}.subgrid,.feedgrid{grid-template-columns:repeat(2,1fr)}.dash-row{grid-template-columns:1fr}}
-@media(max-width:600px){.subgrid,.feedgrid{grid-template-columns:1fr}}
+.demandas-grid-desp{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:6px}
+@media(min-width:1300px){main{max-width:1260px}.subgrid,.feedgrid{grid-template-columns:repeat(4,1fr)}.statgrid{grid-template-columns:repeat(4,1fr)}.demandas-grid-desp{grid-template-columns:repeat(4,1fr)}}
+@media(max-width:850px){.statgrid{grid-template-columns:repeat(2,1fr)}.checkgrid{grid-template-columns:repeat(2,1fr)}.subgrid,.feedgrid{grid-template-columns:repeat(2,1fr)}.dash-row{grid-template-columns:1fr}.demandas-grid-desp{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){.subgrid,.feedgrid,.demandas-grid-desp{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -140,6 +143,12 @@ textarea{min-height:80px;resize:vertical}
   </div>
 
   <div class="card">
+    <h2>📊 Demandas por categoria</h2>
+    <p style="font-size:12.5px;color:#78848e;margin-top:0">Clique para ver a lista filtrada. Ignora o filtro "Poda + Rede" acima (mostra os dois lado a lado).</p>
+    <div id="categoriasBox"></div>
+  </div>
+
+  <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
       <h2 style="margin:0">Equipes</h2>
       <button class="primary" onclick="abrirNovaEquipe(null)">＋ Nova equipe</button>
@@ -177,9 +186,12 @@ textarea{min-height:80px;resize:vertical}
 
     <div id="despViewDemandas" class="hidden">
       <h3 id="despTituloFeed" style="margin:0 0 10px"></h3>
-      <div style="display:flex;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
-        <button class="secondary" id="btnVerExecutadasDesp" onclick="abrirExecutadasDespacho()">📋 Ver executadas</button>
-        <button class="primary" id="btnDespacharSelecao" onclick="despacharSelecao()" disabled>🚚 Despachar selecionadas (0)</button>
+      <div style="display:flex;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;align-items:center">
+        <label class="checktoggle" style="margin:0"><input type="checkbox" id="chkSelecionarTodos" onchange="toggleSelecionarTodos(this.checked)"> Selecionar todos</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="secondary" id="btnVerExecutadasDesp" onclick="abrirExecutadasDespacho()">📋 Ver executadas</button>
+          <button class="primary" id="btnDespacharSelecao" onclick="despacharSelecao()" disabled>🚚 Despachar selecionadas (0)</button>
+        </div>
       </div>
       <div id="despDemandas"></div>
     </div>
@@ -202,6 +214,7 @@ textarea{min-height:80px;resize:vertical}
 const API_URL='/.netlify/functions/proxy';
 let config={},dados=[],equipes=[],arquivados=[];
 const TOLERANCIA_ENDERECO=20;
+const SERVICOS_REDE=['Flytap','Cruzeta','Chave','Para-raio','Jumper','Outro'];
 
 async function apiGet(action,payload){
   let url=API_URL+'?action='+encodeURIComponent(action);
@@ -426,9 +439,8 @@ function carteiraDrop(ev,targetId){
 async function persistirOrdemCarteira(){
   const idsOrdem=_carteiraOrdem.slice();
   try{
-    for(let i=0;i<idsOrdem.length;i++){
-      await apiGet('updateOcorrencia',{id:idsOrdem[i],prioridade:i+1});
-    }
+    const updates=idsOrdem.map((id,i)=>({id,prioridade:i+1}));
+    await apiGet('updateOcorrenciasEmLote',{updates});
     await carregarTudo();
     showToast('Ordem da carteira salva.');
   }catch(e){
@@ -561,6 +573,7 @@ function dashboard(){
   }).join(''):'<div class="empty">Nenhuma atividade concluída ainda neste filtro.</div>';
 
   renderRecorrencias();
+  renderCategorias();
 }
 function abrirListaGenerica(titulo,arr){
   document.getElementById('modal').classList.remove('hidden');
@@ -574,6 +587,37 @@ function visaoGeralFiltroAtual(){
 function filtrarVisaoGeralTodas(){abrirListaGenerica('Todas as ocorrências (filtro atual)',visaoGeralFiltroAtual());}
 function filtrarVisaoGeralStatus(status){abrirListaGenerica(status,visaoGeralFiltroAtual().filter(x=>x.status===status));}
 function filtrarVisaoGeralCiclo(ciclo){abrirListaGenerica(cicloLabel(ciclo),visaoGeralFiltroAtual().filter(x=>x.ciclo===ciclo));}
+
+function categoriaFiltroBase(){
+  const sf=document.getElementById('dfSub').value,cy=document.getElementById('dfCiclo').value;
+  return dados.filter(x=>(!sf||x.sub===sf)&&(!cy||x.ciclo===cy));
+}
+function abrirCategoria(tipo,servico,crit){
+  let arr=categoriaFiltroBase().filter(x=>x.tipo===tipo);
+  if(servico)arr=arr.filter(x=>x.servico===servico);
+  if(crit)arr=arr.filter(x=>x.criticidade===crit);
+  const titulo=tipo+(servico?' — '+servico:'')+(crit?' — '+crit:'');
+  abrirListaGenerica(titulo,arr);
+}
+function renderCategorias(){
+  const base=categoriaFiltroBase();
+  const poda=base.filter(x=>x.tipo==='Poda');
+  const rede=base.filter(x=>x.tipo==='Rede');
+  const critHtml=(tipo,servico,lista)=>{
+    const sv=servico?`'${servico}'`:'null';
+    return `<span class="badge red" style="cursor:pointer" onclick="abrirCategoria('${tipo}',${sv},'Extremo')">🔴 ${critCount(lista,'Extremo')}</span> <span class="badge orange" style="cursor:pointer" onclick="abrirCategoria('${tipo}',${sv},'Urgente')">🟠 ${critCount(lista,'Urgente')}</span> <span class="badge yellow" style="cursor:pointer" onclick="abrirCategoria('${tipo}',${sv},'Média')">🟡 ${critCount(lista,'Média')}</span>`;
+  };
+  const subgruposHtml=SERVICOS_REDE.map(s=>{
+    const listaServ=rede.filter(x=>x.servico===s);
+    if(!listaServ.length)return '';
+    return `<div class="progressrow" style="margin-left:16px;margin-bottom:8px"><div class="progresshead"><span style="cursor:pointer;font-weight:normal" onclick="abrirCategoria('Rede','${s}',null)">↳ ${s}</span><span>${listaServ.length}</span></div><div class="mini">${critHtml('Rede',s,listaServ)}</div></div>`;
+  }).join('');
+  document.getElementById('categoriasBox').innerHTML=`
+    <div class="progressrow"><div class="progresshead"><span style="cursor:pointer" onclick="abrirCategoria('Poda',null,null)">🌳 Poda</span><span>${poda.length}</span></div><div class="mini">${critHtml('Poda',null,poda)}</div></div>
+    <div class="progressrow"><div class="progresshead"><span style="cursor:pointer" onclick="abrirCategoria('Rede',null,null)">⚡ Rede</span><span>${rede.length}</span></div><div class="mini">${critHtml('Rede',null,rede)}</div></div>
+    ${subgruposHtml}
+  `;
+}
 
 
 function equipeDesignadaInclui(csv,id){if(!csv)return false;return String(csv).split(',').map(s=>s.trim()).includes(id);}
@@ -752,18 +796,26 @@ function renderDespachoDemandas(){
   const ordem={Extremo:0,Urgente:1,'Média':2};
   const poda=arr.filter(x=>x.tipo==='Poda').sort((a,b)=>ordem[a.criticidade]-ordem[b.criticidade]);
   const rede=arr.filter(x=>x.tipo==='Rede').sort((a,b)=>ordem[a.criticidade]-ordem[b.criticidade]);
-  const grupo=(titulo,icone,lista)=>lista.length?`<h4 style="margin:14px 0 8px;font-size:14px">${icone} ${titulo} (${lista.length})</h4>`+lista.map(cardDespacho).join(''):'';
+  const grupo=(titulo,icone,lista)=>lista.length?`<h4 style="margin:14px 0 8px;font-size:14px">${icone} ${titulo} (${lista.length})</h4><div class="demandas-grid-desp">${lista.map(cardDespacho).join('')}</div>`:'';
   const el=document.getElementById('despDemandas');
   el.innerHTML=(poda.length||rede.length)?grupo('Poda','🌳',poda)+grupo('Rede','⚡',rede):'<div class="empty">Nenhuma demanda pendente neste alimentador.</div>';
   const btnExec=document.getElementById('btnVerExecutadasDesp');
   if(btnExec)btnExec.textContent='📋 Ver executadas ('+execCount+')';
+  const chkTodos=document.getElementById('chkSelecionarTodos');
+  if(chkTodos){chkTodos.checked=arr.length>0&&arr.every(x=>selecionadas.has(x.id));chkTodos.disabled=arr.length===0;}
   atualizarBotaoDespachoSelecao();
+}
+function toggleSelecionarTodos(marcar){
+  const todas=dados.filter(x=>x.sub===dispSub&&x.feed===dispFeed&&x.status==='Pendente');
+  if(marcar){todas.forEach(x=>selecionadas.add(x.id));}
+  else{todas.forEach(x=>selecionadas.delete(x.id));}
+  renderDespachoDemandas();
 }
 function abrirExecutadasDespacho(){
   const arr=dados.filter(x=>x.sub===dispSub&&x.feed===dispFeed&&x.status==='Executada');
   document.getElementById('modal').classList.remove('hidden');
   document.getElementById('modalTitle').textContent='Executadas — '+dispSub+' / '+dispFeed;
-  document.getElementById('modalBody').innerHTML=(arr.length?arr.map(cardDespachoExecutada).join(''):'<div class="empty">Nenhuma demanda executada neste alimentador ainda.</div>')+'<div style="margin-top:14px"><button class="secondary" onclick="fecharModal()">Fechar</button></div>';
+  document.getElementById('modalBody').innerHTML=(arr.length?`<div class="demandas-grid-desp">${arr.map(cardDespachoExecutada).join('')}</div>`:'<div class="empty">Nenhuma demanda executada neste alimentador ainda.</div>')+'<div style="margin-top:14px"><button class="secondary" onclick="fecharModal()">Fechar</button></div>';
 }
 function locBadge(x){
   return x.latitude&&x.longitude?'<span class="loc-flag loc-yes" title="Localização salva">📍</span>':'<span class="loc-flag loc-no" title="Sem localização salva">📍</span>';
@@ -787,6 +839,9 @@ function cardDespacho(x){
 function toggleSelecao(id,checked){
   if(checked)selecionadas.add(id);else selecionadas.delete(id);
   atualizarBotaoDespachoSelecao();
+  const todas=dados.filter(x=>x.sub===dispSub&&x.feed===dispFeed&&x.status==='Pendente');
+  const chkTodos=document.getElementById('chkSelecionarTodos');
+  if(chkTodos)chkTodos.checked=todas.length>0&&todas.every(x=>selecionadas.has(x.id));
 }
 function atualizarBotaoDespachoSelecao(){
   const btn=document.getElementById('btnDespacharSelecao');
@@ -803,12 +858,13 @@ function abrirModalDespacho(ids,feed){
   if(!ids.length){showToast('Selecione ao menos uma demanda.','error');return;}
   document.getElementById('modal').classList.remove('hidden');
   document.getElementById('modalTitle').textContent='Despachar '+ids.length+' demanda(s)';
-  document.getElementById('modalBody').innerHTML=`<p style="font-size:13px;color:#65717d;margin-top:0">Selecione até 2 equipes para receber estas demandas. O alimentador ${feed||''} passará a aparecer liberado para elas.</p><div class="feedpicker" id="despEquipeCheckboxes">${equipes.length?equipes.map(e=>`<label class="chk" style="margin-bottom:10px"><input type="checkbox" value="${e.id}" onchange="limitarDoisCheckbox(this)"> ${e.nome}</label>`).join(''):'<div class="empty">Nenhuma equipe cadastrada. Crie uma equipe primeiro.</div>'}</div><label style="margin-top:12px">Recado para a(s) equipe(s) (opcional)</label><textarea id="despRecado" placeholder="Ex.: Priorizar criticidade Extremo esta semana."></textarea><div class="errbox" id="despErr"></div><div style="display:flex;gap:8px;margin-top:15px"><button class="primary" onclick='confirmarDespacho(${JSON.stringify(ids)},${JSON.stringify(feed||'')})'>Confirmar despacho</button><button class="secondary" onclick="fecharModal()">Cancelar</button></div>`;
+  document.getElementById('modalBody').innerHTML=`<p style="font-size:13px;color:#65717d;margin-top:0">Selecione até 2 equipes para receber estas demandas. O alimentador ${feed||''} passará a aparecer liberado para elas.</p><div class="feedpicker" id="despEquipeCheckboxes">${equipes.length?equipes.map(e=>`<label class="chk" style="margin-bottom:10px"><input type="checkbox" value="${e.id}" ${_ultimasEquipesDespacho.includes(e.id)?'checked':''} onchange="limitarDoisCheckbox(this)"> ${e.nome}</label>`).join(''):'<div class="empty">Nenhuma equipe cadastrada. Crie uma equipe primeiro.</div>'}</div><label style="margin-top:12px">Recado para a(s) equipe(s) (opcional)</label><textarea id="despRecado" placeholder="Ex.: Priorizar criticidade Extremo esta semana."></textarea><div class="errbox" id="despErr"></div><div style="display:flex;gap:8px;margin-top:15px"><button class="primary" onclick='confirmarDespacho(${JSON.stringify(ids)},${JSON.stringify(feed||'')})'>Confirmar despacho</button><button class="secondary" onclick="fecharModal()">Cancelar</button></div>`;
 }
 function limitarDoisCheckbox(chk){
   const marcados=[...document.querySelectorAll('#despEquipeCheckboxes input:checked')];
   if(marcados.length>2){chk.checked=false;showToast('Selecione no máximo 2 equipes.','error');}
 }
+let _ultimasEquipesDespacho=[];
 async function confirmarDespacho(ids,feed){
   const marcados=[...document.querySelectorAll('#despEquipeCheckboxes input:checked')].map(x=>x.value);
   const err=document.getElementById('despErr');
@@ -818,7 +874,8 @@ async function confirmarDespacho(ids,feed){
   const recadoTexto=document.getElementById('despRecado').value.trim();
   const btn=document.querySelector('#modal .primary');btn.disabled=true;btn.textContent='Despachando...';
   try{
-    for(const id of ids){await apiGet('updateOcorrencia',{id,equipeDesignada});}
+    const updates=ids.map(id=>({id,equipeDesignada}));
+    await apiGet('updateOcorrenciasEmLote',{updates});
     for(const eqId of marcados){
       const eq=equipes.find(e=>e.id===eqId);
       if(!eq)continue;
@@ -829,6 +886,7 @@ async function confirmarDespacho(ids,feed){
         await apiGet('updateEquipe',{id:eq.id,nome:eq.nome,colaborador1:eq.colaborador1,colaborador2:eq.colaborador2,observacao:eq.observacao,alimentadoresLiberados,recado:precisaRecado?recadoTexto:(eq.recado||'')});
       }
     }
+    _ultimasEquipesDespacho=marcados;
     await carregarTudo();
     fecharModal();
     if(dispFeed){renderDespachoDemandas();}else if(dispSub){abrirDespachoSub(dispSub);}else{showDespachoSubs();}
