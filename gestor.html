@@ -101,7 +101,10 @@ textarea{min-height:80px;resize:vertical}
 
 <main>
   <div class="card">
-    <input type="text" id="buscaGlobal" placeholder="🔎 Buscar alimentador, endereço ou equipe..." oninput="renderBuscaGlobal()" style="margin-bottom:0">
+    <div style="display:flex;gap:8px;align-items:center">
+      <input type="text" id="buscaGlobal" placeholder="🔎 Buscar alimentador, endereço ou equipe..." oninput="renderBuscaGlobal()" style="margin-bottom:0;flex:1">
+      <button class="secondary" onclick="atualizarAgora()" title="Buscar dados mais recentes da planilha agora">🔄 Atualizar</button>
+    </div>
     <div id="buscaGlobalResultados" class="hidden" style="margin-top:10px"></div>
   </div>
 
@@ -248,7 +251,14 @@ function ocultarAvisoCache(){
   const el=document.getElementById('cacheBanner');
   if(el){el.classList.add('hidden');el.innerHTML='';}
 }
-async function carregarTudo(){
+let _ultimoFetchEm=0;
+const FETCH_MIN_INTERVAL_MS=8000;
+async function carregarTudo(forcar){
+  const agora=Date.now();
+  const temDados=dados.length||Object.keys(config).length;
+  if(!forcar&&temDados&&(agora-_ultimoFetchEm)<FETCH_MIN_INTERVAL_MS){
+    return; // dados recentes o suficiente — evita nova chamada de rede
+  }
   const primeiraCarga=!dados.length&&!Object.keys(config).length;
   let cache=null;
   if(primeiraCarga){
@@ -261,6 +271,7 @@ async function carregarTudo(){
     dados=r.ocorrencias||[];
     equipes=r.equipes||[];
     arquivados=r.arquivados||[];
+    _ultimoFetchEm=Date.now();
     salvarCacheLocal();
     ocultarAvisoCache();
   }catch(e){
@@ -270,12 +281,23 @@ async function carregarTudo(){
   }
 }
 async function tentarNovamente(){
-  await carregarTudo();
+  await carregarTudo(true);
   initDashboardFilters();
   renderEquipes();
   initRecadoSelect();
   dashboard();
   showDespachoSubs();
+}
+async function atualizarAgora(){
+  await carregarTudo(true);
+  initDashboardFilters();
+  renderEquipes();
+  initRecadoSelect();
+  dashboard();
+  if(dispFeed){renderDespachoDemandas();}
+  else if(dispSub){abrirDespachoSub(dispSub);}
+  else{showDespachoSubs();}
+  showToast('Dados atualizados.');
 }
 function estaArquivado(sub,feed){return arquivados.some(a=>a.sub===sub&&a.feed===feed);}
 function renderBuscaGlobal(){
@@ -300,7 +322,7 @@ function toggleArquivados(){
 async function arquivarAlimentador(f){
   try{
     await apiGet('arquivarAlimentador',{sub:dispSub,feed:f});
-    await carregarTudo();
+    await carregarTudo(true);
     abrirDespachoSub(dispSub);
     showToast('Alimentador arquivado.');
   }catch(e){showToast('Falha ao arquivar: '+e.message,'error');}
@@ -308,7 +330,7 @@ async function arquivarAlimentador(f){
 async function desarquivarAlimentador(f){
   try{
     await apiGet('desarquivarAlimentador',{sub:dispSub,feed:f});
-    await carregarTudo();
+    await carregarTudo(true);
     abrirDespachoSub(dispSub);
     showToast('Alimentador desarquivado.');
   }catch(e){showToast('Falha ao desarquivar: '+e.message,'error');}
@@ -336,7 +358,7 @@ async function enviarRecado(){
   const texto=document.getElementById('recadoTexto').value.trim();
   try{
     await apiGet('updateEquipe',{id:eq.id,nome:eq.nome,colaborador1:eq.colaborador1,colaborador2:eq.colaborador2,observacao:eq.observacao,alimentadoresLiberados:eq.alimentadoresLiberados,recado:texto});
-    await carregarTudo();
+    await carregarTudo(true);
     renderEquipes();
     showToast('Recado enviado para '+eq.nome+'.');
   }catch(e){showToast('Falha ao enviar: '+e.message,'error');}
@@ -441,11 +463,11 @@ async function persistirOrdemCarteira(){
   try{
     const updates=idsOrdem.map((id,i)=>({id,prioridade:i+1}));
     await apiGet('updateOcorrenciasEmLote',{updates});
-    await carregarTudo();
+    await carregarTudo(true);
     showToast('Ordem da carteira salva.');
   }catch(e){
     showToast('Falha ao salvar ordem: '+e.message,'error');
-    await carregarTudo();
+    await carregarTudo(true);
     if(_carteiraEquipeAtual)renderCarteiraEquipe();
   }
 }
@@ -455,7 +477,7 @@ async function retirarDaCarteira(id,eqId){
   const lista=(x.equipeDesignada||'').split(',').map(s=>s.trim()).filter(Boolean).filter(v=>v!==eqId);
   try{
     await apiGet('updateOcorrencia',{id,equipeDesignada:lista.join(',')});
-    await carregarTudo();
+    await carregarTudo(true);
     renderCarteiraEquipe();
     renderEquipes();
     dashboard();
@@ -663,7 +685,7 @@ async function confirmarRemocaoAlimentador(eqId,feed){
   const alimentadoresLiberados=(eq.alimentadoresLiberados||[]).filter(f=>f!==feed);
   try{
     await apiGet('updateEquipe',{id:eq.id,nome:eq.nome,colaborador1:eq.colaborador1,colaborador2:eq.colaborador2,observacao:eq.observacao,recado:eq.recado,alimentadoresLiberados});
-    await carregarTudo();
+    await carregarTudo(true);
     renderEquipes();
     showToast('Alimentador '+feed+' removido da equipe '+eq.nome+'.');
   }catch(e){showToast('Falha ao remover: '+e.message,'error');}
@@ -690,7 +712,7 @@ async function salvarEquipe(idEdit){
     }else{
       await apiGet('addEquipe',{nome,colaborador1,colaborador2,observacao,alimentadoresLiberados:[],recado:''});
     }
-    await carregarTudo();
+    await carregarTudo(true);
     fecharModal();renderEquipes();dashboard();initRecadoSelect();
     showToast('Equipe salva na planilha.');
   }catch(e){err.textContent='Falha ao salvar: '+e.message;err.classList.add('show');}
@@ -700,7 +722,7 @@ function excluirEquipe(id,btn){
     const url=API_URL+'?action=deleteEquipe&id='+encodeURIComponent(id);
     fetch(url).then(r=>r.json()).then(async data=>{
       if(data.error){showToast('Falha ao excluir: '+data.error,'error');return;}
-      await carregarTudo();renderEquipes();dashboard();initRecadoSelect();showToast('Equipe removida.');
+      await carregarTudo(true);renderEquipes();dashboard();initRecadoSelect();showToast('Equipe removida.');
     }).catch(e=>showToast('Falha ao excluir: '+e.message,'error'));
   }else{
     btn.dataset.armed='1';btn.textContent='Confirmar exclusão?';btn.classList.add('danger-armed');
@@ -887,7 +909,7 @@ async function confirmarDespacho(ids,feed){
       }
     }
     _ultimasEquipesDespacho=marcados;
-    await carregarTudo();
+    await carregarTudo(true);
     fecharModal();
     if(dispFeed){renderDespachoDemandas();}else if(dispSub){abrirDespachoSub(dispSub);}else{showDespachoSubs();}
     renderEquipes();
@@ -914,7 +936,7 @@ function renderRecorrencias(){
 }
 
 (async function init(){
-  await carregarTudo();
+  await carregarTudo(true);
   initDashboardFilters();
   renderEquipes();
   initRecadoSelect();
