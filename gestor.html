@@ -90,6 +90,11 @@ textarea{min-height:80px;resize:vertical}
 .back{border:0;background:none;color:#173b57;font-weight:bold;padding:0 0 12px;cursor:pointer}
 .dispatch-quick{display:flex;justify-content:flex-end;margin-top:8px}
 .demandas-grid-desp{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:6px}
+.feedgroup-exec{margin-bottom:10px;border:1px solid #e2e6ea;border-radius:10px;overflow:hidden;background:#fff}
+.feedgroup-title{display:flex;justify-content:space-between;align-items:center;padding:11px 13px;font-size:14px;font-weight:bold;color:#173b57;cursor:pointer;background:#f6f8f9}
+.fg-right{display:flex;align-items:center;gap:8px}
+.toggle-icon{font-size:12px;color:#65717d}
+.feedgroup-body{padding:10px}
 @media(min-width:1300px){main{max-width:1260px}.subgrid,.feedgrid{grid-template-columns:repeat(4,1fr)}.statgrid{grid-template-columns:repeat(4,1fr)}.demandas-grid-desp{grid-template-columns:repeat(4,1fr)}}
 @media(max-width:850px){.statgrid{grid-template-columns:repeat(2,1fr)}.checkgrid{grid-template-columns:repeat(2,1fr)}.subgrid,.feedgrid{grid-template-columns:repeat(2,1fr)}.dash-row{grid-template-columns:1fr}.demandas-grid-desp{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:600px){.subgrid,.feedgrid,.demandas-grid-desp{grid-template-columns:1fr}}
@@ -154,7 +159,7 @@ textarea{min-height:80px;resize:vertical}
 
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
-      <div><h2 style="margin:0">📌 Pendências</h2><small style="color:#78848e">Lance e gerencie demandas diretamente, sem navegar pela árvore de subestações.</small></div>
+      <div><h2 style="margin:0">📌 Pendências</h2><small style="color:#78848e">Apontamentos em aberto — lançados pelo Inspetor em campo ou direto por você aqui.</small></div>
       <button class="primary" onclick="abrirNovaPendencia()">＋ Nova pendência</button>
     </div>
     <div class="filters" style="margin-top:12px">
@@ -643,6 +648,13 @@ function statusCicloFeed(sig,f,ciclo,ano){
   const arr=dados.filter(x=>x.sub===sig&&x.feed===f&&x.ciclo===String(ciclo));
   return arr.length?'execucao':'nao_iniciado';
 }
+function toggleGrupoGestor(id){
+  const body=document.getElementById(id);
+  const icon=document.getElementById('icon_'+id);
+  const abrindo=body.classList.contains('hidden');
+  body.classList.toggle('hidden');
+  if(icon)icon.textContent=abrindo?'▴':'▾';
+}
 function renderPlanoCiclico(){
   const {ciclo,ano}=cicloAtualInfo();
   const sf=document.getElementById('pcFiltroSub').value;
@@ -650,7 +662,8 @@ function renderPlanoCiclico(){
   const subs=Object.entries(config).filter(([sig,s])=>(!sf||sig===sf)&&s.feeds.length);
   const el=document.getElementById('planoCiclicoBox');
   if(!subs.length){el.innerHTML='<div class="empty">Nenhum alimentador cadastrado.</div>';return;}
-  el.innerHTML=`<div style="font-size:12.5px;color:#65717d;margin-bottom:8px">${cicloLabel(ciclo)} / ${ano}</div>`+subs.map(([sig,s])=>{
+  el.innerHTML=`<div style="font-size:12.5px;color:#65717d;margin-bottom:8px">${cicloLabel(ciclo)} / ${ano}</div>`+subs.map(([sig,s],idx)=>{
+    const gid='pc'+idx;
     const linhas=s.feeds.map(f=>{
       const st=statusCicloFeed(sig,f,ciclo,ano);
       const arr=dados.filter(x=>x.sub===sig&&x.feed===f&&x.ciclo===String(ciclo));
@@ -658,11 +671,17 @@ function renderPlanoCiclico(){
       return `<div class="histitem" style="padding:7px 10px;margin-bottom:5px"><div><b>⚡ ${f}</b><span class="hmeta">${arr.length} apontamento(s) · ${exec} executado(s)</span></div><span class="badge ${rot[st][1]}">${rot[st][0]}</span></div>`;
     }).join('');
     const fin=s.feeds.filter(f=>statusCicloFeed(sig,f,ciclo,ano)==='finalizado').length;
-    return `<h4 style="margin:12px 0 6px;font-size:13.5px;color:#173b57">${sig} — ${s.nome} <span class="badge ${fin===s.feeds.length?'green':'blue'}">${fin}/${s.feeds.length} finalizados</span></h4>${linhas}`;
+    return `<div class="feedgroup-exec">
+      <div class="feedgroup-title" onclick="toggleGrupoGestor('${gid}')">
+        <span>${sig} — ${s.nome}</span>
+        <span class="fg-right"><span class="badge ${fin===s.feeds.length?'green':'blue'}">${fin}/${s.feeds.length} finalizados</span><span class="toggle-icon" id="icon_${gid}">▾</span></span>
+      </div>
+      <div class="feedgroup-body hidden" id="${gid}">${linhas}</div>
+    </div>`;
   }).join('');
 }
 
-// ===== Pendências (lançamento direto pelo Gestor) =====
+// ===== Pendências (apontamentos como pendências, lançados pelo Inspetor ou pelo Gestor) =====
 function initPendFiltroSub(){
   const sel=document.getElementById('pendFiltroSub');
   const cur=sel.value;
@@ -675,7 +694,21 @@ function renderPendencias(){
   const ordem={Extremo:0,Urgente:1,'Média':2};
   arr.sort((a,b)=>ordem[a.criticidade]-ordem[b.criticidade]||(b.data||'').localeCompare(a.data||''));
   const el=document.getElementById('pendenciasLista');
-  el.innerHTML=arr.length?`<div class="demandas-grid-desp">${arr.map(cardPendencia).join('')}</div>`:'<div class="empty">Nenhuma pendência com esses filtros.</div>';
+  if(!arr.length){el.innerHTML='<div class="empty">Nenhuma pendência com esses filtros.</div>';return;}
+  const grupos={};
+  arr.forEach(x=>{(grupos[x.sub]=grupos[x.sub]||[]).push(x);});
+  const chaves=Object.keys(grupos).sort();
+  el.innerHTML=chaves.map((sig,idx)=>{
+    const lista=grupos[sig];
+    const gid='pend'+idx;
+    return `<div class="feedgroup-exec">
+      <div class="feedgroup-title" onclick="toggleGrupoGestor('${gid}')">
+        <span>${sig}${config[sig]?' — '+config[sig].nome:''}</span>
+        <span class="fg-right"><span class="badge">${lista.length}</span><span class="toggle-icon" id="icon_${gid}">▾</span></span>
+      </div>
+      <div class="feedgroup-body hidden" id="${gid}"><div class="demandas-grid-desp">${lista.map(cardPendencia).join('')}</div></div>
+    </div>`;
+  }).join('');
 }
 function cardPendencia(x){
   const desig=nomesEquipes(x.equipeDesignada);
