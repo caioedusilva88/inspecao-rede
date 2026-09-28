@@ -114,6 +114,7 @@ textarea{min-height:80px;resize:vertical}
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="secondary" onclick="abrirPlanilha()">👁️ Visualizar</button>
         <button class="secondary" onclick="exportarPlanilhaCSV()">⬇️ Exportar CSV</button>
+        <button class="secondary" onclick="exportarSeparado()" title="Gera 2 arquivos ligados pelo id: dados sem endereço + endereços">📍 Endereço separado</button>
       </div>
     </div>
   </div>
@@ -149,6 +150,28 @@ textarea{min-height:80px;resize:vertical}
     <h2>📊 Demandas por categoria</h2>
     <p style="font-size:12.5px;color:#78848e;margin-top:0">Clique para ver a lista filtrada. Ignora o filtro "Poda + Rede" acima (mostra os dois lado a lado).</p>
     <div id="categoriasBox"></div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <div><h2 style="margin:0">📌 Pendências</h2><small style="color:#78848e">Lance e gerencie demandas diretamente, sem navegar pela árvore de subestações.</small></div>
+      <button class="primary" onclick="abrirNovaPendencia()">＋ Nova pendência</button>
+    </div>
+    <div class="filters" style="margin-top:12px">
+      <select id="pendFiltroSub" onchange="renderPendencias()"></select>
+      <select id="pendFiltroTipo" onchange="renderPendencias()"><option value="">Poda + Rede</option><option value="Poda">Poda</option><option value="Rede">Rede</option></select>
+      <select id="pendFiltroCrit" onchange="renderPendencias()"><option value="">Todas criticidades</option><option value="Extremo">Extremo</option><option value="Urgente">Urgente</option><option value="Média">Média</option></select>
+    </div>
+    <div id="pendenciasLista" style="margin-top:10px"></div>
+  </div>
+
+  <div class="card">
+    <h2>📅 Plano Cíclico</h2>
+    <p style="font-size:12.5px;color:#78848e;margin-top:0">Situação de cada alimentador no ciclo atual — independente do despacho.</p>
+    <div class="filters">
+      <select id="pcFiltroSub" onchange="renderPlanoCiclico()"></select>
+    </div>
+    <div id="planoCiclicoBox" style="margin-top:10px"></div>
   </div>
 
   <div class="card">
@@ -215,7 +238,7 @@ textarea{min-height:80px;resize:vertical}
 <style>.hidden{display:none!important}</style>
 <script>
 const API_URL='/.netlify/functions/proxy';
-let config={},dados=[],equipes=[],arquivados=[];
+let config={},dados=[],equipes=[],arquivados=[],finalizacoes=[],historico=[];
 const TOLERANCIA_ENDERECO=20;
 const SERVICOS_REDE=['Flytap','Cruzeta','Chave','Para-raio','Jumper','Outro'];
 
@@ -230,7 +253,7 @@ async function apiGet(action,payload){
 }
 const CACHE_KEY='inspecao_rede_cache_v1';
 function salvarCacheLocal(){
-  try{localStorage.setItem(CACHE_KEY,JSON.stringify({config,dados,equipes,arquivados,atualizadoEm:new Date().toISOString()}));}
+  try{localStorage.setItem(CACHE_KEY,JSON.stringify({config,dados,equipes,arquivados,finalizacoes,atualizadoEm:new Date().toISOString()}));}
   catch(e){console.error('Falha ao salvar cache local',e);}
 }
 function carregarCacheLocal(){
@@ -263,7 +286,7 @@ async function carregarTudo(forcar){
   let cache=null;
   if(primeiraCarga){
     cache=carregarCacheLocal();
-    if(cache){config=cache.config||{};dados=cache.dados||[];equipes=cache.equipes||[];arquivados=cache.arquivados||[];}
+    if(cache){config=cache.config||{};dados=cache.dados||[];equipes=cache.equipes||[];arquivados=cache.arquivados||[];finalizacoes=cache.finalizacoes||[];}
   }
   try{
     const r=await apiGet('getAll');
@@ -271,6 +294,8 @@ async function carregarTudo(forcar){
     dados=r.ocorrencias||[];
     equipes=r.equipes||[];
     arquivados=r.arquivados||[];
+    finalizacoes=r.finalizacoes||[];
+    historico=r.historico||[];
     _ultimoFetchEm=Date.now();
     salvarCacheLocal();
     ocultarAvisoCache();
@@ -378,13 +403,15 @@ function obterCarteira(eqId){
   });
   return arr;
 }
-function abrirCarteiraEquipe(eqId){
+async function abrirCarteiraEquipe(eqId){
   const eq=equipes.find(e=>e.id===eqId);
   if(!eq)return;
+  await carregarTudo(true);
+  const eqAtualizada=equipes.find(e=>e.id===eqId)||eq;
   _carteiraEquipeAtual=eqId;
   _carteiraAgrupamento='nenhum';
   document.getElementById('modal').classList.remove('hidden');
-  document.getElementById('modalTitle').textContent='📁 Carteira — '+eq.nome;
+  document.getElementById('modalTitle').textContent='📁 Carteira — '+eqAtualizada.nome;
   document.getElementById('modalBody').innerHTML=`
     <p style="font-size:12.5px;color:#78848e;margin-top:0">Agrupe para revisar por critério, ou deixe em "Nenhum" pra arrastar (ou usar ↑/↓) e montar a ordem de prioridade que a equipe vai ver.</p>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
@@ -488,12 +515,14 @@ async function retirarDaCarteira(id,eqId){
 const PLANILHA_COLUNAS={
   ocorrencias:{titulo:'Ocorrências',campos:['id','sub','feed','data','ciclo','endereco','tipo','criticidade','servico','quantidade','observacao','status','equipeDesignada','equipe','dataExecucao','obsExec','latitude','longitude','prioridade']},
   equipes:{titulo:'Equipes',campos:['id','nome','colaborador1','colaborador2','recado','observacao']},
+  historico:{titulo:'Histórico',campos:['id','sub','feed','data','ciclo','endereco','tipo','criticidade','servico','quantidade','observacao','status','equipeDesignada','equipe','dataExecucao','obsExec','latitude','longitude','prioridade']},
   arquivados:{titulo:'Arquivados',campos:['sub','feed','data']},
   finalizacoes:{titulo:'Finalizações',campos:['sub','feed','ciclo','ano','data','resumo']}
 };
 function dadosPlanilha(chave){
   if(chave==='ocorrencias')return dados;
   if(chave==='equipes')return equipes;
+  if(chave==='historico')return historico;
   if(chave==='arquivados')return arquivados;
   if(chave==='finalizacoes')return finalizacoes;
   return [];
@@ -507,11 +536,13 @@ function abrirPlanilha(){
       <select id="planilhaSel" onchange="renderPlanilhaTabela()" style="width:auto;flex:1">
         <option value="ocorrencias">Ocorrências</option>
         <option value="equipes">Equipes</option>
+        <option value="historico">Histórico (ciclos anteriores)</option>
         <option value="arquivados">Arquivados</option>
         <option value="finalizacoes">Finalizações</option>
       </select>
       <button class="secondary" onclick="copiarPlanilhaTabela()">📋 Copiar</button>
       <button class="secondary" onclick="exportarPlanilhaCSV()">⬇️ Exportar CSV</button>
+      <button class="secondary" onclick="exportarSeparado()" title="Gera 2 arquivos ligados pelo id: dados sem endereço + endereços">📍 Endereço separado</button>
     </div>
     <div id="planilhaTabelaBox" style="max-height:60vh;overflow:auto;border:1px solid #e2e6ea;border-radius:8px"></div>
     <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="secondary" onclick="fecharModal()">Fechar</button></div>
@@ -550,6 +581,28 @@ async function copiarPlanilhaTabela(){
     showToast('Não foi possível copiar automaticamente. Selecione o texto manualmente.','error');
   }
 }
+function csvDe(campos,arr){
+  const esc=v=>{v=v!==undefined&&v!==null?String(v):'';return (v.includes(',')||v.includes('"')||v.includes('\n'))?'"'+v.replace(/"/g,'""')+'"':v;};
+  return [campos.join(',')].concat(arr.map(r=>campos.map(c=>esc(r[c])).join(','))).join('\n');
+}
+function baixarTexto(nome,texto){
+  const blob=new Blob(['\ufeff'+texto],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=nome;document.body.appendChild(a);a.click();a.remove();
+  URL.revokeObjectURL(url);
+}
+function exportarSeparado(){
+  const sel=document.getElementById('planilhaSel');
+  const chave=sel&&(sel.value==='historico')?'historico':'ocorrencias';
+  const arr=dadosPlanilha(chave);
+  const todos=PLANILHA_COLUNAS[chave].campos;
+  const semEndereco=todos.filter(c=>!['endereco','latitude','longitude'].includes(c));
+  const soEndereco=['id','sub','feed','endereco','latitude','longitude'];
+  baixarTexto('inspecao_rede_'+chave+'_sem_endereco.csv',csvDe(semEndereco,arr));
+  setTimeout(()=>baixarTexto('inspecao_rede_'+chave+'_enderecos.csv',csvDe(soEndereco,arr)),400);
+  showToast('2 arquivos exportados: dados sem endereço + endereços (ligados pela coluna id).');
+}
 function exportarPlanilhaCSV(){
   const {texto,titulo}=planilhaParaTexto(',');
   const blob=new Blob(['\ufeff'+texto],{type:'text/csv;charset=utf-8'});
@@ -571,6 +624,164 @@ function fecharModal(){document.getElementById('modal').classList.add('hidden');
 function initDashboardFilters(){
   const sel=document.getElementById('dfSub');
   sel.innerHTML='<option value="">Todas as subestações</option>'+Object.entries(config).map(([sig,s])=>`<option value="${sig}">${sig} — ${s.nome}</option>`).join('');
+}
+
+// ===== Ciclo (helpers) =====
+function cicloPorData(d){const m=new Date(d+'T12:00:00').getMonth()+1;return String(m<=4?1:m<=8?2:3);}
+function cicloAtualInfo(){const hoje=new Date().toISOString().slice(0,10);return {ciclo:cicloPorData(hoje),ano:String(new Date().getFullYear())};}
+function feedFinalizado(sub,feed,ciclo,ano){return finalizacoes.some(f=>f.sub===sub&&f.feed===feed&&String(f.ciclo)===String(ciclo)&&String(f.ano)===String(ano));}
+
+// ===== Plano Cíclico =====
+function initPcFiltroSub(){
+  const sel=document.getElementById('pcFiltroSub');
+  const cur=sel.value;
+  sel.innerHTML='<option value="">Todas as subestações</option>'+Object.entries(config).map(([sig,s])=>`<option value="${sig}">${sig} — ${s.nome}</option>`).join('');
+  sel.value=cur;
+}
+function statusCicloFeed(sig,f,ciclo,ano){
+  if(feedFinalizado(sig,f,ciclo,ano))return 'finalizado';
+  const arr=dados.filter(x=>x.sub===sig&&x.feed===f&&x.ciclo===String(ciclo));
+  return arr.length?'execucao':'nao_iniciado';
+}
+function renderPlanoCiclico(){
+  const {ciclo,ano}=cicloAtualInfo();
+  const sf=document.getElementById('pcFiltroSub').value;
+  const rot={finalizado:['🟢 Finalizado','green'],execucao:['🟡 Em execução','yellow'],nao_iniciado:['🔴 Não iniciado','red']};
+  const subs=Object.entries(config).filter(([sig,s])=>(!sf||sig===sf)&&s.feeds.length);
+  const el=document.getElementById('planoCiclicoBox');
+  if(!subs.length){el.innerHTML='<div class="empty">Nenhum alimentador cadastrado.</div>';return;}
+  el.innerHTML=`<div style="font-size:12.5px;color:#65717d;margin-bottom:8px">${cicloLabel(ciclo)} / ${ano}</div>`+subs.map(([sig,s])=>{
+    const linhas=s.feeds.map(f=>{
+      const st=statusCicloFeed(sig,f,ciclo,ano);
+      const arr=dados.filter(x=>x.sub===sig&&x.feed===f&&x.ciclo===String(ciclo));
+      const exec=arr.filter(x=>x.status==='Executada').length;
+      return `<div class="histitem" style="padding:7px 10px;margin-bottom:5px"><div><b>⚡ ${f}</b><span class="hmeta">${arr.length} apontamento(s) · ${exec} executado(s)</span></div><span class="badge ${rot[st][1]}">${rot[st][0]}</span></div>`;
+    }).join('');
+    const fin=s.feeds.filter(f=>statusCicloFeed(sig,f,ciclo,ano)==='finalizado').length;
+    return `<h4 style="margin:12px 0 6px;font-size:13.5px;color:#173b57">${sig} — ${s.nome} <span class="badge ${fin===s.feeds.length?'green':'blue'}">${fin}/${s.feeds.length} finalizados</span></h4>${linhas}`;
+  }).join('');
+}
+
+// ===== Pendências (lançamento direto pelo Gestor) =====
+function initPendFiltroSub(){
+  const sel=document.getElementById('pendFiltroSub');
+  const cur=sel.value;
+  sel.innerHTML='<option value="">Todas as subestações</option>'+Object.entries(config).map(([sig,s])=>`<option value="${sig}">${sig} — ${s.nome}</option>`).join('');
+  sel.value=cur;
+}
+function renderPendencias(){
+  const sf=document.getElementById('pendFiltroSub').value,tf=document.getElementById('pendFiltroTipo').value,cf=document.getElementById('pendFiltroCrit').value;
+  const arr=dados.filter(x=>x.status==='Pendente'&&(!sf||x.sub===sf)&&(!tf||x.tipo===tf)&&(!cf||x.criticidade===cf));
+  const ordem={Extremo:0,Urgente:1,'Média':2};
+  arr.sort((a,b)=>ordem[a.criticidade]-ordem[b.criticidade]||(b.data||'').localeCompare(a.data||''));
+  const el=document.getElementById('pendenciasLista');
+  el.innerHTML=arr.length?`<div class="demandas-grid-desp">${arr.map(cardPendencia).join('')}</div>`:'<div class="empty">Nenhuma pendência com esses filtros.</div>';
+}
+function cardPendencia(x){
+  const desig=nomesEquipes(x.equipeDesignada);
+  return `<div class="card item ${x.criticidade.toLowerCase().replace('é','e')}" style="box-shadow:none;padding:14px">
+    <div class="itemtop"><strong>${x.tipo==='Poda'?'🌳':'⚡'} ${x.sub}/${x.feed}${x.servico?' — '+x.servico:''}</strong><span class="badge ${x.criticidade==='Extremo'?'red':x.criticidade==='Urgente'?'orange':'yellow'}">${x.criticidade}</span></div>
+    <div class="meta">${x.endereco} ${locBadge(x)}<br><b>Ciclo:</b> ${cicloLabel(x.ciclo)}${desig?'<br><b>Equipe designada:</b> '+desig:''}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="ci-btn" onclick="abrirModalDespacho(['${x.id}'],'${x.feed}')">🚚 Despachar</button>
+      <button class="ci-btn" onclick="editarPendencia('${x.id}')">✏️ Editar</button>
+      <button class="ci-btn ci-remove" onclick="excluirPendencia('${x.id}',this)">🗑️ Excluir</button>
+    </div>
+  </div>`;
+}
+let pnTipoAtual='',pnCritAtual='';
+function abrirNovaPendencia(){
+  const {ciclo}=cicloAtualInfo();
+  document.getElementById('modal').classList.remove('hidden');
+  document.getElementById('modalTitle').textContent='Nova pendência (lançada pelo Gestor)';
+  document.getElementById('modalBody').innerHTML=`<div class="grid">
+    <div><label>Subestação</label><select id="pnSub" onchange="onPnSubChange()">${Object.entries(config).map(([sig,s])=>`<option value="${sig}">${sig} — ${s.nome}</option>`).join('')}</select></div>
+    <div><label>Alimentador</label><select id="pnFeed"></select></div>
+    <div class="full"><label>Ciclo</label><select id="pnCiclo"><option value="1" ${ciclo==='1'?'selected':''}>Ciclo 1 (Jan/Abr)</option><option value="2" ${ciclo==='2'?'selected':''}>Ciclo 2 (Mai/Ago)</option><option value="3" ${ciclo==='3'?'selected':''}>Ciclo 3 (Set/Dez)</option><option value="extra">🔶 Inspeção Extra</option></select></div>
+    <div><label>Tipo</label><div class="choices"><button id="pnPoda" onclick="pnTipo('Poda')">🌳 Poda</button><button id="pnRede" onclick="pnTipo('Rede')">⚡ Rede</button></div></div>
+    <div><label>Criticidade</label><div class="choices crit"><button class="extremo" onclick="pnCrit('Extremo',this)">Extremo</button><button class="urgente" onclick="pnCrit('Urgente',this)">Urgente</button><button class="media" onclick="pnCrit('Média',this)">Média</button></div></div>
+    <div><label>Quantidade</label><input id="pnQuantidade" type="number" min="1" value="1"></div>
+    <div id="pnServicoBox" class="hidden"><label>Serviço de Rede</label><select id="pnServico">${SERVICOS_REDE.map(s=>`<option>${s}</option>`).join('')}</select></div>
+    <div class="full"><label>Endereço</label><input id="pnEndereco" placeholder="Rua, número, bairro"></div>
+    <div class="full"><label>Observação</label><textarea id="pnObservacao"></textarea></div>
+  </div><div class="errbox" id="pnErr"></div><div style="display:flex;gap:8px;margin-top:15px"><button class="primary" onclick="salvarPendencia()">Salvar</button><button class="secondary" onclick="fecharModal()">Cancelar</button></div>`;
+  pnTipoAtual='';pnCritAtual='';
+  onPnSubChange();
+}
+function onPnSubChange(){
+  const sig=document.getElementById('pnSub').value;
+  document.getElementById('pnFeed').innerHTML=(config[sig]?config[sig].feeds:[]).map(f=>`<option value="${f}">${f}</option>`).join('');
+}
+function pnTipo(v){pnTipoAtual=v;document.getElementById('pnPoda').classList.toggle('selected',v==='Poda');document.getElementById('pnRede').classList.toggle('selected',v==='Rede');document.getElementById('pnServicoBox').classList.toggle('hidden',v!=='Rede');}
+function pnCrit(v,b){pnCritAtual=v;document.querySelectorAll('#modal .crit button').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');}
+async function salvarPendencia(){
+  const sub=document.getElementById('pnSub').value,feed=document.getElementById('pnFeed').value;
+  const end=document.getElementById('pnEndereco').value.trim();
+  const err=document.getElementById('pnErr');
+  if(!feed){err.textContent='Selecione um alimentador.';err.classList.add('show');return;}
+  if(!end||!pnTipoAtual||!pnCritAtual){err.textContent='Preencha endereço, tipo e criticidade.';err.classList.add('show');return;}
+  err.classList.remove('show');
+  const btn=document.querySelector('#modal .primary');btn.disabled=true;btn.textContent='Salvando...';
+  try{
+    await apiGet('addOcorrencia',{sub,feed,data:new Date().toISOString().slice(0,10),ciclo:document.getElementById('pnCiclo').value,endereco:end,tipo:pnTipoAtual,criticidade:pnCritAtual,servico:pnTipoAtual==='Rede'?document.getElementById('pnServico').value:'',quantidade:document.getElementById('pnQuantidade').value,observacao:document.getElementById('pnObservacao').value});
+    await carregarTudo(true);
+    fecharModal();renderPendencias();renderPlanoCiclico();dashboard();
+    showToast('Pendência lançada.');
+  }catch(e){
+    err.textContent='Falha ao salvar: '+e.message;err.classList.add('show');
+    btn.disabled=false;btn.textContent='Salvar';
+  }
+}
+let egTipoAtual='',egCritAtual='';
+function editarPendencia(id){
+  const x=dados.find(d=>d.id===id);if(!x)return;
+  document.getElementById('modal').classList.remove('hidden');
+  document.getElementById('modalTitle').textContent='Editar pendência — '+x.sub+' / '+x.feed;
+  document.getElementById('modalBody').innerHTML=`<div class="grid"><div class="full"><label>Data</label><input id="egData" type="date" value="${x.data}"></div><div><label>Tipo</label><div class="choices"><button id="egPoda" onclick="egTipo('Poda')">🌳 Poda</button><button id="egRede" onclick="egTipo('Rede')">⚡ Rede</button></div></div><div><label>Criticidade</label><div class="choices crit"><button class="extremo" onclick="egCrit('Extremo',this)">Extremo</button><button class="urgente" onclick="egCrit('Urgente',this)">Urgente</button><button class="media" onclick="egCrit('Média',this)">Média</button></div></div><div><label>Quantidade</label><input id="egQuantidade" type="number" min="1" value="${x.quantidade}"></div><div id="egServicoBox" class="${x.tipo==='Rede'?'':'hidden'}"><label>Serviço de Rede</label><select id="egServico">${SERVICOS_REDE.map(s=>`<option ${s===x.servico?'selected':''}>${s}</option>`).join('')}</select></div><div class="full"><label>Endereço</label><input id="egEndereco" value="${String(x.endereco).replace(/"/g,'&quot;')}"></div><div class="full"><label>Observação</label><textarea id="egObservacao">${x.observacao||''}</textarea></div></div><div class="errbox" id="egErr"></div><div style="display:flex;gap:8px;margin-top:15px"><button class="primary" onclick="salvarEdicaoPendencia('${x.id}')">Salvar alterações</button><button class="secondary" onclick="fecharModal()">Cancelar</button></div>`;
+  egTipoAtual=x.tipo;egCritAtual=x.criticidade;
+  document.getElementById('egPoda').classList.toggle('selected',x.tipo==='Poda');
+  document.getElementById('egRede').classList.toggle('selected',x.tipo==='Rede');
+  document.querySelectorAll('#modal .crit button').forEach(b=>{if(b.textContent===x.criticidade)b.classList.add('selected');});
+}
+function egTipo(v){egTipoAtual=v;document.getElementById('egPoda').classList.toggle('selected',v==='Poda');document.getElementById('egRede').classList.toggle('selected',v==='Rede');document.getElementById('egServicoBox').classList.toggle('hidden',v!=='Rede');}
+function egCrit(v,b){egCritAtual=v;document.querySelectorAll('#modal .crit button').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');}
+async function salvarEdicaoPendencia(id){
+  const end=document.getElementById('egEndereco').value.trim();
+  const err=document.getElementById('egErr');
+  if(!end||!egTipoAtual||!egCritAtual){err.textContent='Preencha endereço, tipo e criticidade.';err.classList.add('show');return;}
+  err.classList.remove('show');
+  const btn=document.querySelector('#modal .primary');btn.disabled=true;btn.textContent='Salvando...';
+  try{
+    await apiGet('updateOcorrencia',{id,data:document.getElementById('egData').value,endereco:end,tipo:egTipoAtual,criticidade:egCritAtual,servico:egTipoAtual==='Rede'?document.getElementById('egServico').value:'',quantidade:document.getElementById('egQuantidade').value,observacao:document.getElementById('egObservacao').value});
+    await carregarTudo(true);
+    fecharModal();renderPendencias();dashboard();
+    showToast('Pendência atualizada.');
+  }catch(e){
+    showToast('Falha ao salvar: '+e.message,'error');
+    btn.disabled=false;btn.textContent='Salvar alterações';
+  }
+}
+function excluirPendencia(id,btn){
+  if(btn.dataset.armed==='1'){
+    confirmarExclusaoPendencia(id,btn);
+  }else{
+    btn.dataset.armed='1';btn.textContent='Confirmar?';btn.classList.add('danger-armed');
+    setTimeout(()=>{if(btn.dataset.armed==='1'){btn.dataset.armed='0';btn.textContent='🗑️ Excluir';btn.classList.remove('danger-armed');}},3500);
+  }
+}
+async function confirmarExclusaoPendencia(id,btn){
+  btn.disabled=true;btn.textContent='Excluindo...';
+  try{
+    const res=await fetch(API_URL+'?action=deleteOcorrencia&id='+encodeURIComponent(id));
+    const data=await res.json();
+    if(data.error)throw new Error(data.error);
+    await carregarTudo(true);
+    renderPendencias();renderPlanoCiclico();dashboard();
+    showToast('Pendência excluída.');
+  }catch(e){
+    showToast('Falha ao excluir: '+e.message,'error');
+    btn.disabled=false;btn.textContent='🗑️ Excluir';btn.dataset.armed='0';btn.classList.remove('danger-armed');
+  }
 }
 
 function dashboard(){
@@ -596,6 +807,10 @@ function dashboard(){
 
   renderRecorrencias();
   renderCategorias();
+  initPendFiltroSub();
+  initPcFiltroSub();
+  renderPendencias();
+  renderPlanoCiclico();
 }
 function abrirListaGenerica(titulo,arr){
   document.getElementById('modal').classList.remove('hidden');

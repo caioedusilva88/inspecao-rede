@@ -96,8 +96,17 @@ textarea{min-height:90px;resize:vertical}.full{grid-column:1/-1}
     <button class="primary" onclick="novaOcorrencia()">＋ Nova ocorrência</button></div>
 
     <div class="card" id="cardCiclo">
-      <div class="toolbar" style="margin-bottom:0">
-        <div><b id="cicloAtualLabel" style="font-size:14px"></b><div id="cicloStatusTxt" style="font-size:12px;color:#65717d;margin-top:3px"></div></div>
+      <div class="toolbar" style="margin-bottom:0;align-items:flex-start">
+        <div class="full" style="min-width:180px">
+          <label style="margin-bottom:4px">Ciclo desta inspeção</label>
+          <select id="cicloSelecionado" onchange="mudarCicloSelecionado()">
+            <option value="1">Ciclo 1 (Janeiro/Abril)</option>
+            <option value="2">Ciclo 2 (Maio/Agosto)</option>
+            <option value="3">Ciclo 3 (Setembro/Dezembro)</option>
+            <option value="extra">🔶 Inspeção Extra (fora do ciclo normal)</option>
+          </select>
+          <div id="cicloStatusTxt" style="font-size:12px;color:#65717d;margin-top:6px"></div>
+        </div>
         <div id="cicloAcoes"></div>
       </div>
     </div>
@@ -247,10 +256,30 @@ function renderBusca(){
 function abrirSub(sig){subAtual=sig;document.getElementById('viewHome').classList.add('hidden');document.getElementById('viewFeeders').classList.remove('hidden');document.getElementById('viewOcorrencias').classList.add('hidden');document.getElementById('tituloSub').textContent=sig+' — '+config[sig].nome;document.getElementById('subInfo').textContent=config[sig].feeds.length+' alimentadores cadastrados';renderFeeders();}
 function renderFeeders(){const s=config[subAtual];document.getElementById('alimentadores').innerHTML=s.feeds.length?s.feeds.map(f=>{const p=pending(subAtual,f);return `<div class="feedcard" onclick="abrirFeed('${f}')"><div class="subhead"><strong>⚡ ${f}</strong><span class="badge">${p.length} pend.</span></div><div class="mini"><span class="badge red">🔴 ${critCount(p,'Extremo')}</span><span class="badge orange">🟠 ${critCount(p,'Urgente')}</span><span class="badge yellow">🟡 ${critCount(p,'Média')}</span></div></div>`}).join(''):'<div class="empty">Nenhum alimentador cadastrado nesta subestação.<br>Use "＋ Adicionar alimentador".</div>';}
 function abrirFeed(f){feedAtual=f;document.getElementById('viewFeeders').classList.add('hidden');document.getElementById('viewOcorrencias').classList.remove('hidden');document.getElementById('tituloFeed').textContent=f;document.getElementById('feedInfo').textContent=config[subAtual].nome+' ('+subAtual+')';renderFeed();renderHistoricoRelancamento();renderCicloStatus();}
+let _cicloSelecionadoAtual='1',_cicloSelecionadoChave='';
 function renderCicloStatus(){
-  const {ciclo,ano}=cicloAtualInfo();
+  const {ano}=cicloAtualInfo();
+  const chave=subAtual+'|'+feedAtual;
+  if(_cicloSelecionadoChave!==chave){
+    _cicloSelecionadoAtual=cicloEsperado(subAtual,feedAtual,ano)||cicloAtualInfo().ciclo;
+    _cicloSelecionadoChave=chave;
+  }
+  document.getElementById('cicloSelecionado').value=_cicloSelecionadoAtual;
+  atualizarStatusCicloTexto();
+}
+function mudarCicloSelecionado(){
+  _cicloSelecionadoAtual=document.getElementById('cicloSelecionado').value;
+  atualizarStatusCicloTexto();
+}
+function atualizarStatusCicloTexto(){
+  const {ano}=cicloAtualInfo();
+  const ciclo=_cicloSelecionadoAtual;
+  if(ciclo==='extra'){
+    document.getElementById('cicloStatusTxt').textContent='🔶 Os lançamentos entrarão como Inspeção Extra — não contam no progresso dos 3 ciclos do ano.';
+    document.getElementById('cicloAcoes').innerHTML='';
+    return;
+  }
   const finalizado=feedFinalizado(subAtual,feedAtual,ciclo,ano);
-  document.getElementById('cicloAtualLabel').textContent='📅 '+cicloLabel(ciclo)+' / '+ano;
   const arrCiclo=dados.filter(x=>x.sub===subAtual&&x.feed===feedAtual&&x.ciclo===String(ciclo));
   document.getElementById('cicloStatusTxt').textContent=finalizado?'✅ Ciclo finalizado — '+arrCiclo.length+' apontamento(s) compilado(s).':arrCiclo.length+' apontamento(s) lançado(s) neste ciclo ainda em aberto.';
   document.getElementById('cicloAcoes').innerHTML=finalizado
@@ -258,19 +287,21 @@ function renderCicloStatus(){
     :'<button class="primary" onclick="finalizarCiclo()">✅ Finalizar ciclo deste alimentador</button>';
 }
 async function finalizarCiclo(){
-  const {ciclo,ano}=cicloAtualInfo();
+  const {ano}=cicloAtualInfo();
+  const ciclo=_cicloSelecionadoAtual;
   const arrCiclo=dados.filter(x=>x.sub===subAtual&&x.feed===feedAtual&&x.ciclo===String(ciclo));
   const resumo=arrCiclo.length+' apontamento(s) — '+arrCiclo.filter(x=>x.tipo==='Poda').length+' Poda, '+arrCiclo.filter(x=>x.tipo==='Rede').length+' Rede';
   try{
     await apiGet('finalizarCicloAlimentador',{sub:subAtual,feed:feedAtual,ciclo,ano,resumo});
     await carregarTudo();
-    renderCicloStatus();
+    atualizarStatusCicloTexto();
     showSubs();
     showToast('Ciclo finalizado para '+feedAtual+'.');
   }catch(e){showToast('Falha ao finalizar ciclo: '+e.message,'error');}
 }
 async function reabrirCiclo(){
-  const {ciclo,ano}=cicloAtualInfo();
+  const {ano}=cicloAtualInfo();
+  const ciclo=_cicloSelecionadoAtual;
   try{
     await apiGet('reabrirCicloAlimentador',{sub:subAtual,feed:feedAtual,ciclo,ano});
     await carregarTudo();
@@ -411,17 +442,10 @@ async function adicionarAlimentador(){
 
 let _capturedLat=null,_capturedLng=null;
 function novaOcorrencia(){
-  const ano=new Date().getFullYear();
-  const sugestao=cicloEsperado(subAtual,feedAtual,ano)||cicloPorData(new Date().toISOString().slice(0,10));
   document.getElementById('modal').classList.remove('hidden');
-  document.getElementById('modalTitle').textContent='Nova ocorrência — '+subAtual+' / '+feedAtual;
-  document.getElementById('modalBody').innerHTML=`<div class="grid"><div class="full"><label>Data da inspeção</label><input id="data" type="date" value="${new Date().toISOString().slice(0,10)}"></div><div class="full"><label>Ciclo</label><select id="ciclo" onchange="onCicloChange()"><option value="1" ${sugestao==='1'?'selected':''}>Ciclo 1 (Janeiro/Abril)</option><option value="2" ${sugestao==='2'?'selected':''}>Ciclo 2 (Maio/Agosto)</option><option value="3" ${sugestao==='3'?'selected':''}>Ciclo 3 (Setembro/Dezembro)</option><option value="extra">🔶 Inspeção Extra (fora do ciclo normal)</option></select><div id="extraHint" class="notice hidden" style="margin-top:8px">Inspeções extras não contam para o progresso dos 3 ciclos do ano — use para vistorias avulsas, reclamações, verificações pontuais etc. Descreva o motivo na observação.</div></div><div><label>Tipo</label><div class="choices"><button id="poda" onclick="tipo('Poda')">🌳 Poda</button><button id="rede" onclick="tipo('Rede')">⚡ Rede</button></div></div><div><label>Criticidade</label><div class="choices crit"><button class="extremo" onclick="crit('Extremo',this)">Extremo</button><button class="urgente" onclick="crit('Urgente',this)">Urgente</button><button class="media" onclick="crit('Média',this)">Média</button></div></div><div><label>Quantidade</label><input id="quantidade" type="number" min="1" value="1"></div><div id="servicoBox" class="hidden"><label>Serviço de Rede</label><select id="servico" onchange="atualizarRecorrenciaPreview()">${SERVICOS_REDE.map(s=>`<option>${s}</option>`).join('')}</select></div><div class="full"><label>Endereço</label><input id="endereco" placeholder="Rua, número, bairro" oninput="atualizarRecorrenciaPreview()"><div id="recorrenciaPreview" class="recorrencia-hint"></div></div><div class="full"><label>Localização (opcional)</label><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="secondary" onclick="capturarLocalizacao()">📍 Capturar localização atual</button><span id="locStatus" style="font-size:12px;color:#65717d">Não capturada</span></div></div><div class="full"><label id="obsLabel">Observação</label><textarea id="observacao"></textarea></div></div><div class="errbox" id="ocorrErr"></div><div style="display:flex;gap:8px;margin-top:15px"><button class="primary" onclick="salvarOcorrencia()">Salvar</button><button class="secondary" onclick="fecharModal()">Cancelar</button></div>`;
+  document.getElementById('modalTitle').textContent='Nova ocorrência — '+subAtual+' / '+feedAtual+' ('+cicloLabel(_cicloSelecionadoAtual)+')';
+  document.getElementById('modalBody').innerHTML=`<div class="grid">${_cicloSelecionadoAtual==='extra'?'<div class="full notice">🔶 Esta ocorrência entrará como Inspeção Extra. Vale descrever o motivo na observação.</div>':''}<div class="full"><label>Data da inspeção</label><input id="data" type="date" value="${new Date().toISOString().slice(0,10)}"></div><div><label>Tipo</label><div class="choices"><button id="poda" onclick="tipo('Poda')">🌳 Poda</button><button id="rede" onclick="tipo('Rede')">⚡ Rede</button></div></div><div><label>Criticidade</label><div class="choices crit"><button class="extremo" onclick="crit('Extremo',this)">Extremo</button><button class="urgente" onclick="crit('Urgente',this)">Urgente</button><button class="media" onclick="crit('Média',this)">Média</button></div></div><div><label>Quantidade</label><input id="quantidade" type="number" min="1" value="1"></div><div id="servicoBox" class="hidden"><label>Serviço de Rede</label><select id="servico" onchange="atualizarRecorrenciaPreview()">${SERVICOS_REDE.map(s=>`<option>${s}</option>`).join('')}</select></div><div class="full"><label>Endereço</label><input id="endereco" placeholder="Rua, número, bairro" oninput="atualizarRecorrenciaPreview()"><div id="recorrenciaPreview" class="recorrencia-hint"></div></div><div class="full"><label>Localização (opcional)</label><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="secondary" onclick="capturarLocalizacao()">📍 Capturar localização atual</button><span id="locStatus" style="font-size:12px;color:#65717d">Não capturada</span></div></div><div class="full"><label>Observação</label><textarea id="observacao"></textarea></div></div><div class="errbox" id="ocorrErr"></div><div style="display:flex;gap:8px;margin-top:15px"><button class="primary" onclick="salvarOcorrencia()">Salvar</button><button class="secondary" onclick="fecharModal()">Cancelar</button></div>`;
   tipoAtual='';critAtual='';_capturedLat=null;_capturedLng=null;
-}
-function onCicloChange(){
-  const v=document.getElementById('ciclo').value;
-  document.getElementById('extraHint').classList.toggle('hidden',v!=='extra');
-  document.getElementById('obsLabel').textContent=v==='extra'?'Observação (motivo da inspeção extra) *':'Observação';
 }
 function capturarLocalizacao(){
   if(!navigator.geolocation){showToast('Geolocalização não suportada neste navegador.','error');return;}
@@ -456,24 +480,22 @@ function atualizarRecorrenciaPreview(){
 async function salvarOcorrencia(){
   const end=document.getElementById('endereco').value.trim();
   const err=document.getElementById('ocorrErr');
-  const cicloSel=document.getElementById('ciclo').value;
   const obs=document.getElementById('observacao').value.trim();
   if(!end||!tipoAtual||!critAtual){err.textContent='Preencha endereço, tipo e criticidade.';err.classList.add('show');return;}
   if(tipoAtual==='Rede'&&!document.getElementById('servico').value){err.textContent='Selecione o serviço de Rede.';err.classList.add('show');return;}
-  if(cicloSel==='extra'&&!obs){err.textContent='Descreva o motivo da inspeção extra na observação.';err.classList.add('show');return;}
   err.classList.remove('show');
   const data=document.getElementById('data').value;
   const draft={sub:subAtual,feed:feedAtual,data,endereco:end,tipo:tipoAtual,criticidade:critAtual,servico:tipoAtual==='Rede'?document.getElementById('servico').value:'',quantidade:document.getElementById('quantidade').value,observacao:obs,latitude:_capturedLat,longitude:_capturedLng};
-  await finalizarOcorrencia(draft,cicloSel);
+  await finalizarOcorrencia(draft,_cicloSelecionadoAtual);
 }
 async function finalizarOcorrencia(draft,ciclo){
   const btn=document.querySelector('#modal .primary');
   if(btn){btn.disabled=true;btn.textContent='Salvando...';}
   try{
-    await apiGet('addOcorrencia',{sub:draft.sub,feed:draft.feed,data:draft.data,ciclo:String(ciclo),endereco:draft.endereco,tipo:draft.tipo,criticidade:draft.criticidade,servico:draft.servico,quantidade:draft.quantidade,observacao:draft.observacao,latitude:draft.latitude||'',longitude:draft.longitude||''});
+    const resp=await apiGet('addOcorrencia',{sub:draft.sub,feed:draft.feed,data:draft.data,ciclo:String(ciclo),endereco:draft.endereco,tipo:draft.tipo,criticidade:draft.criticidade,servico:draft.servico,quantidade:draft.quantidade,observacao:draft.observacao,latitude:draft.latitude||'',longitude:draft.longitude||''});
     await carregarTudo();
     fecharModal();renderFeed();renderHistoricoRelancamento();showSubs();abrirSub(draft.sub);abrirFeed(draft.feed);
-    showToast('Ocorrência registrada na planilha.');
+    showToast('Ocorrência registrada na planilha.'+(resp&&resp.arquivadas?' '+resp.arquivadas+' item(ns) executado(s) de ciclo anterior arquivado(s).':''));
   }catch(e){
     showToast('Falha ao salvar: '+e.message,'error');
     if(btn){btn.disabled=false;btn.textContent='Salvar';}

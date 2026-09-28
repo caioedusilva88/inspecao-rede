@@ -82,6 +82,13 @@ button:disabled{opacity:.6}
     </div>
     <div id="listaExecutor"></div>
   </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="togglePlanoCiclicoExec()">
+      <h2 style="margin:0;font-size:16px">📅 Plano Cíclico</h2><span id="pcExecIcon" class="toggle-icon">▾</span>
+    </div>
+    <div id="planoCiclicoExec" class="hidden" style="margin-top:10px"></div>
+  </div>
 </main>
 
 <div id="modal" class="modal hidden"><div class="modalbox">
@@ -91,7 +98,7 @@ button:disabled{opacity:.6}
 
 <script>
 const API_URL='/.netlify/functions/proxy';
-let config={},dados=[],equipes=[];
+let config={},dados=[],equipes=[],finalizacoes=[];
 let equipeAtual='',verTodas=false;
 const TOLERANCIA_ENDERECO=20;
 
@@ -106,7 +113,7 @@ async function apiGet(action,payload){
 }
 const CACHE_KEY='inspecao_rede_cache_v1';
 function salvarCacheLocal(){
-  try{localStorage.setItem(CACHE_KEY,JSON.stringify({config,dados,equipes,atualizadoEm:new Date().toISOString()}));}
+  try{localStorage.setItem(CACHE_KEY,JSON.stringify({config,dados,equipes,finalizacoes,atualizadoEm:new Date().toISOString()}));}
   catch(e){console.error('Falha ao salvar cache local',e);}
 }
 function carregarCacheLocal(){
@@ -129,12 +136,13 @@ function ocultarAvisoCache(){
 }
 async function carregarTudo(){
   const cache=carregarCacheLocal();
-  if(cache){config=cache.config||{};dados=cache.dados||[];equipes=cache.equipes||[];}
+  if(cache){config=cache.config||{};dados=cache.dados||[];equipes=cache.equipes||[];finalizacoes=cache.finalizacoes||[];}
   try{
     const r=await apiGet('getAll');
     config=r.config||{};
     dados=r.ocorrencias||[];
     equipes=r.equipes||[];
+    finalizacoes=r.finalizacoes||[];
     salvarCacheLocal();
     ocultarAvisoCache();
   }catch(e){
@@ -183,6 +191,7 @@ function renderExecutores(){
     arr=[];
   }
   renderContadorHoje(eq);
+  renderPlanoCiclicoExec(eq);
   const el=document.getElementById('listaExecutor');
   if(!arr.length){
     document.getElementById('countSummary').textContent='0 atividade(s) pendente(s)';
@@ -211,6 +220,36 @@ function renderExecutores(){
       <div class="feedgroup-body hidden" id="${gid}">${lista.map(cardExecutor).join('')}</div>
     </div>`;
   }).join('');
+}
+function cicloPorData(d){const m=new Date(d+'T12:00:00').getMonth()+1;return String(m<=4?1:m<=8?2:3);}
+function cicloAtualInfo(){const hoje=new Date().toISOString().slice(0,10);return {ciclo:cicloPorData(hoje),ano:String(new Date().getFullYear())};}
+function feedFinalizado(sub,feed,ciclo,ano){return finalizacoes.some(f=>f.sub===sub&&f.feed===feed&&String(f.ciclo)===String(ciclo)&&String(f.ano)===String(ano));}
+function togglePlanoCiclicoExec(){
+  const box=document.getElementById('planoCiclicoExec');
+  const abrindo=box.classList.contains('hidden');
+  box.classList.toggle('hidden');
+  document.getElementById('pcExecIcon').textContent=abrindo?'▴':'▾';
+}
+function renderPlanoCiclicoExec(eq){
+  const box=document.getElementById('planoCiclicoExec');
+  if(!box)return;
+  const {ciclo,ano}=cicloAtualInfo();
+  const rot={finalizado:['🟢 Finalizado','green'],execucao:['🟡 Em execução','yellow'],nao_iniciado:['🔴 Não iniciado','red']};
+  const liberados=eq&&!verTodas?new Set(eq.alimentadoresLiberados||[]):null;
+  let html=`<div style="font-size:12.5px;color:#65717d;margin-bottom:8px">${cicloLabel(ciclo)} / ${ano}${liberados?' — alimentadores da sua equipe':''}</div>`;
+  let algum=false;
+  Object.entries(config).forEach(([sig,s])=>{
+    const feeds=s.feeds.filter(f=>!liberados||liberados.has(f));
+    if(!feeds.length)return;
+    algum=true;
+    html+=`<h4 style="margin:10px 0 6px;font-size:13px;color:#173b57">${sig} — ${s.nome}</h4>`+feeds.map(f=>{
+      const arr=dados.filter(x=>x.sub===sig&&x.feed===f&&x.ciclo===String(ciclo));
+      const st=feedFinalizado(sig,f,ciclo,ano)?'finalizado':(arr.length?'execucao':'nao_iniciado');
+      const exec=arr.filter(x=>x.status==='Executada').length;
+      return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;border:1px solid #e5e8eb;border-radius:8px;padding:7px 10px;margin-bottom:5px"><div><b style="font-size:12.5px">⚡ ${f}</b><div style="font-size:11px;color:#65717d">${arr.length} apontamento(s) · ${exec} executado(s)</div></div><span class="badge ${rot[st][1]}">${rot[st][0]}</span></div>`;
+    }).join('');
+  });
+  box.innerHTML=algum?html:'<div class="empty">Nenhum alimentador para exibir.</div>';
 }
 function renderContadorHoje(eq){
   const hojeStr=agoraFormatado().split(' ')[0];
